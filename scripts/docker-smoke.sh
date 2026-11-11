@@ -28,3 +28,7 @@ assert.equal(config.enabled,false); assert.deepEqual(config.providers,[]);
 assert.equal((await fetch(root+"/api/health")).status,404);
 assert.equal((await fetch(root+"/cost-reduction-programs/.env")).status,404);
 console.log("Non-root Docker smoke checks passed; real AI not enabled.");'
+# Exercise the explicit initializer on an isolated disposable tmpfs, never production state.
+docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+  --user 1000:1000 --tmpfs /app/state:rw,noexec,nosuid,size=1m,uid=1000,gid=1000,mode=0700 \
+  -e AI_STATE_PATH=/app/state/ai-budget.json "$image" node scripts/init-ai-budget.mjs

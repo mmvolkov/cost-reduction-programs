@@ -29,6 +29,10 @@ services:
       PUBLIC_ORIGIN: https://scout-argument.ru
       CORS_ALLOWED_ORIGINS: https://mmvolkov.github.io
       NODE_OPTIONS: --max-old-space-size=128
+      AI_STATE_PATH: /app/state/ai-budget.json
+    # Single-host durable budget shared across recreates; never remove/reset to bypass quota.
+    volumes:
+      - ai-budget-state:/app/state:rw
     # Deliberately no host ports, Docker socket, host filesystem or SSH credentials.
     networks:
       scout-proxy:
@@ -53,3 +57,6 @@ networks:
   scout-proxy:
     external: true
     name: n8n_default
+
+volumes:
+  ai-budget-state:

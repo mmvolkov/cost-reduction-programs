@@ -10,7 +10,7 @@ const $$ = s => [...document.querySelectorAll(s)];
 const fmt = (n, digits = 1) => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: digits }).format(n);
 const selected = new Set(['procurement', 'production']);
 const defaults = { annualSpend:120, savingsPercent:8, implementationCost:2, monthlyCost:.1, rampMonths:4 };
-let currentCalculation, baseRate = 8, currentContext = {}, messages = [], config = { enabled:false, providers:[] };
+let currentCalculation, baseRate = 8, currentContext = {}, messages = [], config = { enabled:false, requiresAccessCode:true, providers:[] };
 let settings = { providerId:'softline', accessCode:'', temperature:.5 };
 let pending = false, requestController = null, requestVersion = 0, toastTimer;
 
@@ -102,7 +102,10 @@ async function loadConfig() {
     if (!config.providers.length) { const opt=document.createElement('option'); opt.value=''; opt.textContent='Нет настроенных подключений'; select.append(opt); }
     settings.providerId = config.providers.some(p=>p.id===settings.providerId) ? settings.providerId : config.providers[0]?.id || '';
     select.value = settings.providerId;
-    $('#ai-status').textContent = config.enabled ? 'Для первого сообщения введите код доступа в настройках ⚙.' : 'AI пока не подключён. Калькулятор и материалы доступны. Владельцу сервера: добавьте ключ API и код доступа по инструкции в репозитории.';
+    const needsCode = config.requiresAccessCode !== false;
+    $('#access-code-setting').hidden = !needsCode;
+    $('#public-access-note').hidden = needsCode;
+    $('#ai-status').textContent = !config.enabled ? 'AI пока не подключён. Материалы и калькулятор доступны. Владельцу сервера: проверьте ключ и устойчивый счётчик по инструкции.' : needsCode ? 'Для первого сообщения введите код доступа в настройках ⚙.' : `Публичный AI: до ${config.limits?.dailyRequests || 100} обращений к модели в сутки на всех посетителей, не более ${config.limits?.maxConcurrent || 2} одновременно. Ошибки также расходуют лимит. Сброс в 00:00 UTC.`;
   } catch { $('#ai-status').textContent = 'Не удалось проверить AI. Материалы и калькулятор работают. Перезагрузите страницу после запуска сервера.'; }
   updateModelLabel();
 }
@@ -110,7 +113,7 @@ async function sendMessage(event) {
   event.preventDefault(); if (pending) return;
   const content = $('#chat-input').value.trim(); if (!content) return;
   if (!config.enabled) { toast('AI ещё не подключён на сервере. Откройте настройки для инструкции.'); $('#settings-dialog').showModal(); return; }
-  if (!settings.accessCode) { toast('Введите код доступа к ассистенту.'); $('#settings-dialog').showModal(); $('#access-code').focus(); return; }
+  if (config.requiresAccessCode !== false && !settings.accessCode) { toast('Введите код доступа к ассистенту.'); $('#settings-dialog').showModal(); $('#access-code').focus(); return; }
   if (!$('#ai-consent').checked) { toast('Подтвердите передачу диалога и контекста модели.'); $('#ai-consent').focus(); return; }
   const nextMessages = [...messages, {role:'user',content}];
   // Bound history by both count and characters; never retain hidden longer history in requests.
@@ -120,7 +123,7 @@ async function sendMessage(event) {
   pending = true; $('#send-chat').disabled=true;
   const version=++requestVersion; requestController = new AbortController(); const timer=setTimeout(()=>requestController?.abort(),50000);
   try {
-    const response = await fetch(apiUrl('chat'),{method:'POST',headers:{'Content-Type':'application/json'},signal:requestController.signal,body:JSON.stringify({providerId:settings.providerId,accessCode:settings.accessCode,consent:true,messages:nextMessages,context:currentContext,temperature:settings.temperature})});
+    const response = await fetch(apiUrl('chat'),{method:'POST',headers:{'Content-Type':'application/json'},signal:requestController.signal,body:JSON.stringify({providerId:settings.providerId,...(config.requiresAccessCode !== false ? {accessCode:settings.accessCode} : {}),consent:true,messages:nextMessages,context:currentContext,temperature:settings.temperature})});
     const data = await response.json();
     if(version!==requestVersion) return;
     if(!response.ok) throw new Error(typeof data.error==='string'?data.error:'Ответ модели недоступен.');
@@ -159,7 +162,7 @@ $$('[data-prompt]').forEach(button=>button.addEventListener('click',()=>{$('#cha
 $('#open-settings').addEventListener('click',()=>{ $('#provider-select').value=settings.providerId; $('#access-code').value=settings.accessCode; $('#temperature').value=String(settings.temperature); $('#settings-dialog').showModal(); });
 $('#close-settings').addEventListener('click',()=>$('#settings-dialog').close());
 $('#settings-dialog').addEventListener('click',event=>{if(event.target===$('#settings-dialog')){const r=event.target.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)event.target.close();}});
-$('#settings-form').addEventListener('submit',event=>{event.preventDefault();settings={providerId:$('#provider-select').value,accessCode:$('#access-code').value,temperature:Number($('#temperature').value)};updateModelLabel();$('#settings-dialog').close();if(config.enabled)$('#ai-status').textContent=settings.accessCode?'Подключение выбрано. Проверьте согласие перед отправкой.':'Введите код доступа в настройках ⚙.';toast('Настройки сохранены в этой вкладке.');});
+$('#settings-form').addEventListener('submit',event=>{event.preventDefault();settings={providerId:$('#provider-select').value,accessCode:$('#access-code').value,temperature:Number($('#temperature').value)};updateModelLabel();$('#settings-dialog').close();if(config.enabled)$('#ai-status').textContent=(config.requiresAccessCode === false || settings.accessCode)?'Подключение выбрано. Проверьте согласие перед отправкой.':'Введите код доступа в настройках ⚙.';toast('Настройки сохранены в этой вкладке.');});
 $('#chat-form').addEventListener('submit',sendMessage);
 $('#chat-input').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();$('#chat-form').requestSubmit();}});
 $('#clear-chat').addEventListener('click',()=>{requestVersion++;requestController?.abort();pending=false;$('#send-chat').disabled=false;messages=[];currentContext={};$('#chat-messages').replaceChildren();appendMessage('assistant','Начинаем новый диалог. Расскажите, что хотите улучшить в экономике бизнеса.');$('#chat-context span').textContent='Свободный диалог';$('#clear-context').hidden=true;$('#chat-input').value='';$('#ai-consent').checked=false;toast('Диалог и контекст очищены из этой вкладки.');});

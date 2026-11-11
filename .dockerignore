@@ -11,3 +11,5 @@
 !public/**
 !test/
 !test/**
+!scripts/
+!scripts/**

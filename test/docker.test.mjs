@@ -16,3 +16,11 @@ test('Compose confines routing to the approved host and exact path prefix', asyn
  assert.doesNotMatch(compose,/^\s+ports:|docker\.sock|privileged:\s*true|network_mode:\s*host/m);
  assert.match(compose,/read_only: true/); assert.match(compose,/no-new-privileges:true/);
 });
+test('persistent AI budget uses only a dedicated volume and explicit initializer', async()=>{
+ const compose=await read('compose.yaml'), dockerfile=await read('Dockerfile');
+ assert.match(compose,/ai-budget-state:\/app\/state:rw/);
+ assert.match(compose,/AI_STATE_PATH: \/app\/state\/ai-budget.json/);
+ assert.match(dockerfile,/chmod 700 \/app\/state/);
+ assert.match(dockerfile,/init-ai-budget.mjs/);
+ assert.doesNotMatch(dockerfile,/CMD.*init-ai-budget/);
+});
