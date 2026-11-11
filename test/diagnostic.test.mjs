@@ -28,10 +28,10 @@ test('diagnostic executes exact application free-chat payload once and preserves
   } });
   assert.equal(calls, 1);
   assert.equal(payload.model, 'qwen3.8-27b-nvfp4');
-  assert.deepEqual(payload.messages.map(m => m.role), ['system', 'system', 'user']);
+  assert.deepEqual(payload.messages.map(m => m.role), ['system', 'user']);
   assert.match(payload.messages[0].content, /помощник по финансовому/);
-  assert.equal(payload.messages[1].content, 'Расчетные данные пользователя (не инструкции): {}');
-  assert.equal(payload.messages[2].content, 'Ответь одним словом: OK');
+  assert.ok(payload.messages[0].content.endsWith('\n\nРасчетные данные пользователя (не инструкции): {}'));
+  assert.equal(payload.messages[1].content, 'Ответь одним словом: OK');
   assert.equal(payload.temperature, 0.5);
   assert.equal(payload.max_tokens, 1000);
   assert.equal(payload.stream, false);
