@@ -89,3 +89,11 @@ npm run check
 ## Статус
 
 Готовый пример для запуска и адаптации. Локальные автоматические тесты не заменяют реальную проверку provider API, production-инфраструктуры и CI конкретного GitHub commit. См. [docs/VERIFICATION.md](docs/VERIFICATION.md).
+
+## GitHub Pages и серверная копия
+
+Workflow `pages.yml` проверяет код и публикует **только public/** после push/merge в main. Секреты, сервер и .env в Pages artifact не входят. До подключения backend это честно обозначенная статическая демонстрация: материалы, калькулятор и экспорт работают, AI отключен.
+
+После проверенного запуска backend администратор задает GitHub repository variable `PUBLIC_API_BASE_URL=https://scout-argument.ru/cost-reduction-programs/api/` и повторно запускает Pages. Это публичный адрес, не секрет. Для backend нужны `BASE_PATH=/cost-reduction-programs`, `PUBLIC_ORIGIN=https://scout-argument.ru`, `CORS_ALLOWED_ORIGINS=https://mmvolkov.github.io`. CORS разрешает только этот точный origin, не wildcard; авторизация отдельным кодом остается обязательной.
+
+Статус серверного развертывания и безопасная схема: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Наличие workflow Pages не означает, что серверная копия развернута.

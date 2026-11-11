@@ -14,21 +14,41 @@ const SYSTEM = `Ты помощник по финансовому снижени
 
 export function createApp({ env = process.env, fetchImpl = globalThis.fetch } = {}) {
   const profiles = profilesFrom(env), limit = createLimiter(env);
+  const basePath = (env.BASE_PATH || '').replace(/\/$/, '');
+  if (basePath && !/^\/[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)*$/.test(basePath)) throw new Error('Invalid BASE_PATH');
+  const allowedOrigins = new Set((env.CORS_ALLOWED_ORIGINS || '').split(',').map(x => x.trim()).filter(Boolean));
+  for (const origin of allowedOrigins) {
+    const u = new URL(origin);
+    if (u.protocol !== 'https:' || u.origin !== origin) throw new Error('Invalid CORS origin');
+  }
   const enabled = Boolean(env.AI_ACCESS_CODE && profiles.some(p => env[p.apiKeyEnv]));
   const maxTokens = boundedInt(env.AI_MAX_COMPLETION_TOKENS, 1000, 64, 2000);
-  const send = (res, status, data) => { res.writeHead(status, { ...HEADERS, 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
+  const send = (res, status, data) => { res.writeHead(status, { ...HEADERS, 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...(res.corsOrigin ? { 'Access-Control-Allow-Origin': res.corsOrigin, Vary: 'Origin' } : {}) }); res.end(JSON.stringify(data)); };
   return http.createServer(async (req, res) => {
     try {
       let parsed;
       try { parsed = new URL(req.url, 'http://local'); } catch { return send(res, 400, { error: 'Некорректный адрес.' }); }
-      const route = parsed.pathname;
+      let route = parsed.pathname;
+      if (basePath) {
+        if (route === basePath && ['GET', 'HEAD'].includes(req.method)) { res.writeHead(308, { ...HEADERS, Location: basePath + '/' }); res.end(); return; }
+        if (!route.startsWith(basePath + '/')) return send(res, 404, { error: 'Адрес не найден.' });
+        route = route.slice(basePath.length);
+      }
+      const origin = req.headers.origin;
+      const sameOrigin = env.PUBLIC_ORIGIN || `http://${req.headers.host}`;
+      const isAllowedCrossOrigin = Boolean(origin && allowedOrigins.has(origin));
+      if (route.startsWith('/api/') && isAllowedCrossOrigin) res.corsOrigin = origin;
+      if (route.startsWith('/api/') && req.method === 'OPTIONS') {
+        const requestedHeaders = String(req.headers['access-control-request-headers'] || '').toLowerCase().split(',').map(x => x.trim()).filter(Boolean);
+        if (!isAllowedCrossOrigin || !['GET', 'POST'].includes(req.headers['access-control-request-method']) || requestedHeaders.some(x => x !== 'content-type')) return send(res, 403, { error: 'Запрос с другого сайта запрещен.' });
+        res.writeHead(204, { ...HEADERS, 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'GET, POST', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '600', Vary: 'Origin' }); res.end(); return;
+      }
       if (req.method === 'GET' && route === '/api/health') return send(res, 200, { ok: true });
       if (req.method === 'GET' && route === '/api/config') return send(res, 200, { enabled, providers: profiles.filter(p => enabled && env[p.apiKeyEnv]).map(({ id, label, model }) => ({ id, label, model })) });
       if (route === '/api/chat' && req.method === 'POST') {
         if (!limit(req.socket.remoteAddress || 'unknown')) return send(res, 429, { error: 'Лимит запросов исчерпан. Повторите позже.' });
         // Never trust forwarded headers. A TLS proxy must preserve Host and configure PUBLIC_ORIGIN.
-        const expectedOrigin = env.PUBLIC_ORIGIN || `http://${req.headers.host}`;
-        if ((req.headers.origin && req.headers.origin !== expectedOrigin) || ['cross-site', 'same-site'].includes(req.headers['sec-fetch-site'])) return send(res, 403, { error: 'Запрос с другого сайта запрещен.' });
+        if ((origin && origin !== sameOrigin && !isAllowedCrossOrigin) || (['cross-site', 'same-site'].includes(req.headers['sec-fetch-site']) && !isAllowedCrossOrigin)) return send(res, 403, { error: 'Запрос с другого сайта запрещен.' });
         if (!/^application\/json(?:\s*;|$)/i.test(req.headers['content-type'] || '')) return send(res, 415, { error: 'Требуется JSON.' });
         if (!enabled) return send(res, 503, { error: 'ИИ-помощник отключен. Администратор должен настроить ключ API и код доступа.' });
         if (Number(req.headers['content-length']) > 48000) return send(res, 413, { error: 'Слишком большой запрос.' });

@@ -1,5 +1,9 @@
+import { deployment } from './runtime-config.js';
 import { measures, cases, industries } from './data.js';
 import { calculateSavings } from './calculator.js';
+
+const apiBase = deployment.apiBaseUrl || (deployment.mode === 'server' ? new URL('./api/', import.meta.url).href : null);
+const apiUrl = name => new URL(name, apiBase).href;
 
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -84,8 +88,12 @@ function updateModelLabel() {
   $('#model-label').textContent = profile ? `${profile.label} · ${profile.model}` : 'Qwen · требуется настройка сервера';
 }
 async function loadConfig() {
+  if (!apiBase) {
+    $('#ai-status').textContent = 'Это публичная демонстрация. AI будет доступен после подключения защищенного сервера. Материалы и калькулятор работают.';
+    updateModelLabel(); return;
+  }
   try {
-    const response = await fetch('/api/config', { cache:'no-store' });
+    const response = await fetch(apiUrl('config'), { cache:'no-store' });
     if (!response.ok) throw new Error();
     config = await response.json();
     if (!Array.isArray(config.providers)) throw new Error();
@@ -112,7 +120,7 @@ async function sendMessage(event) {
   pending = true; $('#send-chat').disabled=true;
   const version=++requestVersion; requestController = new AbortController(); const timer=setTimeout(()=>requestController?.abort(),50000);
   try {
-    const response = await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},signal:requestController.signal,body:JSON.stringify({providerId:settings.providerId,accessCode:settings.accessCode,consent:true,messages:nextMessages,context:currentContext,temperature:settings.temperature})});
+    const response = await fetch(apiUrl('chat'),{method:'POST',headers:{'Content-Type':'application/json'},signal:requestController.signal,body:JSON.stringify({providerId:settings.providerId,accessCode:settings.accessCode,consent:true,messages:nextMessages,context:currentContext,temperature:settings.temperature})});
     const data = await response.json();
     if(version!==requestVersion) return;
     if(!response.ok) throw new Error(typeof data.error==='string'?data.error:'Ответ модели недоступен.');

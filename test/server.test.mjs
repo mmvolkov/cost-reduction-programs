@@ -99,3 +99,32 @@ test('calculator context enforces the same bounds as the public calculator', asy
   }
   assert.equal(requests, 0);
 });
+test('path-isolated server serves only its prefix and redirects canonical path', async t => {
+  const { url } = await fixture(t, { BASE_PATH: '/cost-reduction-programs' });
+  assert.equal((await fetch(url + '/api/health')).status, 404);
+  assert.equal((await fetch(url + '/cost-reduction-programs/api/health')).status, 200);
+  const r = await fetch(url + '/cost-reduction-programs', { redirect: 'manual' });
+  assert.equal(r.status, 308); assert.equal(r.headers.get('location'), '/cost-reduction-programs/');
+  assert.equal((await fetch(url + '/cost-reduction-programs/')).status, 200);
+  assert.equal((await fetch(url + '/cost-reduction-programs/app.js')).status, 200);
+  assert.equal((await fetch(url + '/cost-reduction-programs-other/')).status, 404);
+});
+test('CORS only grants configured exact HTTPS origin, without cookie credentials', async t => {
+  const origin = 'https://mmvolkov.github.io';
+  const { url, post } = await fixture(t, { PUBLIC_ORIGIN: 'https://scout-argument.ru', CORS_ALLOWED_ORIGINS: origin });
+  const response = await post(payload, { Origin: origin, 'Sec-Fetch-Site': 'cross-site' });
+  assert.equal(response.status, 200); assert.equal(response.headers.get('access-control-allow-origin'), origin);
+  assert.equal(response.headers.get('access-control-allow-credentials'), null);
+  const preflight = (o, method='POST', headers='content-type') => fetch(url + '/api/chat', { method: 'OPTIONS', headers: { Origin:o, 'Access-Control-Request-Method':method, 'Access-Control-Request-Headers':headers } });
+  assert.equal((await preflight(origin)).status, 204);
+  for (const o of ['https://evil.example', 'https://mmvolkov.github.io.evil.example', 'null']) {
+    const denied = await preflight(o); assert.equal(denied.status, 403); assert.equal(denied.headers.get('access-control-allow-origin'), null);
+  }
+  assert.equal((await preflight(origin, 'DELETE')).status, 403);
+  assert.equal((await preflight(origin, 'POST', 'authorization')).status, 403);
+  assert.equal((await post(payload, { Origin: 'https://evil.example' })).status, 403);
+});
+test('deployment config fails closed on malformed path or CORS origins', () => {
+  for (const BASE_PATH of ['//foo', '/..', '/foo?x=1', '/foo bar']) assert.throws(() => createApp({env:{BASE_PATH}}));
+  for (const CORS_ALLOWED_ORIGINS of ['*','null','http://evil.example','https://example.com/path']) assert.throws(() => createApp({env:{CORS_ALLOWED_ORIGINS}}));
+});
