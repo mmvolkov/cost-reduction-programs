@@ -1,0 +1,13 @@
+# Allowlist prevents secrets, Git history and workspace artifacts entering the build.
+**
+!Dockerfile
+!.dockerignore
+!compose.yaml
+!package.json
+!server.mjs
+!lib/
+!lib/**
+!public/
+!public/**
+!test/
+!test/**

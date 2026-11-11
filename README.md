@@ -97,3 +97,7 @@ Workflow `pages.yml` проверяет код и публикует **толь�
 После проверенного запуска backend администратор задает GitHub repository variable `PUBLIC_API_BASE_URL=https://scout-argument.ru/cost-reduction-programs/api/` и повторно запускает Pages. Это публичный адрес, не секрет. Для backend нужны `BASE_PATH=/cost-reduction-programs`, `PUBLIC_ORIGIN=https://scout-argument.ru`, `CORS_ALLOWED_ORIGINS=https://mmvolkov.github.io`. CORS разрешает только этот точный origin, не wildcard; авторизация отдельным кодом остается обязательной.
 
 Статус серверного развертывания и безопасная схема: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Наличие workflow Pages не означает, что серверная копия развернута.
+
+## Docker на сервере
+
+Добавлены Dockerfile и compose.yaml для отдельного непривилегированного контейнера. Команды и ограничения: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). CI проверяет build и изолированный smoke test; деплой в Облакотеку сам по себе не включен.

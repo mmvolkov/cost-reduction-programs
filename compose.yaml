@@ -1,0 +1,55 @@
+name: cost-reduction-programs
+services:
+  cost-reduction-app:
+    build:
+      context: .
+      target: runtime
+    image: cost-reduction-programs:local
+    restart: unless-stopped
+    init: true
+    user: "1000:1000"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m,mode=1777
+    mem_limit: 256m
+    cpus: 0.50
+    pids_limit: 128
+    stop_grace_period: 20s
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3000"
+      BASE_PATH: /cost-reduction-programs
+      PUBLIC_ORIGIN: https://scout-argument.ru
+      CORS_ALLOWED_ORIGINS: https://mmvolkov.github.io
+      NODE_OPTIONS: --max-old-space-size=128
+    # Deliberately no host ports, Docker socket, host filesystem or SSH credentials.
+    networks:
+      scout-proxy:
+        aliases:
+          - cost-reduction-programs
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: n8n_default
+      traefik.http.routers.cost-reduction-programs.rule: "Host(`scout-argument.ru`) && (Path(`/cost-reduction-programs`) || PathPrefix(`/cost-reduction-programs/`))"
+      traefik.http.routers.cost-reduction-programs.priority: "100"
+      traefik.http.routers.cost-reduction-programs.entrypoints: websecure
+      traefik.http.routers.cost-reduction-programs.tls: "true"
+      traefik.http.routers.cost-reduction-programs.tls.certresolver: mytlschallenge
+      traefik.http.routers.cost-reduction-programs.service: cost-reduction-programs
+      traefik.http.services.cost-reduction-programs.loadbalancer.server.port: "3000"
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+networks:
+  scout-proxy:
+    external: true
+    name: n8n_default

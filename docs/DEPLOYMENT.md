@@ -19,6 +19,33 @@ ssh -p SSH_PORT DEPLOY_USER@SERVER_HOST 'id; hostname; command -v node; command 
 
 Не передавайте пароли или содержимое .env в выводе.
 
+## Docker-развертывание (подготовлено, еще не запущено)
+
+В репозитории есть Dockerfile, compose.yaml и изолированный smoke test. Образ Node 24 собирается с проверкой тестов; runtime работает uid 1000, без root, дополнительных capabilities, публикации host-портов и Docker socket. В образ не попадают .env, Git-история, тесты или документы. Файловая система read-only, память ограничена 256 МБ, CPU 0.5, процессы 128.
+
+Compose подключается только к уже существующей external-сети n8n_default. Он не создает или перенастраивает сеть, Traefik или основной Scout. Маршрут: Host scout-argument.ru И точный /cost-reduction-programs либо префикс /cost-reduction-programs/. Priority 100 выше существующего общего маршрута 20. Остальные пути и домены не перехватываются. TLS использует существующий resolver mytlschallenge. Это становится публичным маршрутом только после явного запуска контейнера.
+
+Приложение принимает исходный путь через BASE_PATH; StripPrefix не используется. Перед первым запуском проверьте существующий proxy, свободные ресурсы и отсутствие конфликтующего сервиса/маршрута.
+
+### Первый шаг после обновления кода
+
+```sh
+git -C "$HOME/cost-reduction-programs" pull --ff-only
+```
+
+Далее выполняйте по одному шагу с проверкой результата:
+
+1. Проверить `docker compose version` (Compose v2).
+2. В каталоге проекта создать .env из .env.example, не перезаписывая существующий файл, и ограничить доступ к нему. На первом запуске можно оставить AI_API_KEY и AI_ACCESS_CODE пустыми: сайт/калькулятор работают, AI отключен. Ключи не передавайте в терминальные логи.
+3. `docker compose config --quiet` - синтаксическая проверка. **Не присылайте вывод обычного docker compose config: он может раскрывать .env.**
+4. `docker compose build` - собирает образ и запускает тесты, не меняет маршрутизацию.
+5. После согласования публичного маршрута: `docker compose up -d --no-deps cost-reduction-app`.
+6. Проверить `docker compose ps`, состояние health, HTTP https://scout-argument.ru/cost-reduction-programs/api/health и сохранность основного сайта. Проверить UI, относительные asset URLs и диалог после задания секретов.
+
+Остановка/откат только этого нового проекта: `docker compose stop cost-reduction-app`; не выполняйте команды в каталоге Scout и не удаляйте external-сеть. Сохраните предыдущий commit/image перед будущим обновлением. На первом запуске остановка нового контейнера удаляет только его Traefik-маршрут.
+
+GitHub CI проверяет Compose, docker build и smoke test без секретов, без production-сети и без публикации образа. Этот job **не выполняет deployment**.
+
 ## Предлагаемая схема после проверки сервера
 
 1. Отдельный каталог /srv/cost-reduction-programs, отдельный непривилегированный service user и Node 24. Приложение слушает только loopback на свободном порту.

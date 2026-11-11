@@ -23,3 +23,16 @@ jobs:
           node-version: ${{ matrix.node }}
       - name: Syntax and unit / API tests
         run: npm run check
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose without secrets
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
+      - name: Build tested non-root runtime
+        run: docker build --target runtime --tag cost-reduction-programs:check .
+      - name: Smoke test isolated image without network or secrets
+        run: sh scripts/docker-smoke.sh cost-reduction-programs:check
