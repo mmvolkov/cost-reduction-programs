@@ -1,6 +1,7 @@
 import { deployment } from './runtime-config.js';
 import { measures, cases, industries } from './data.js';
 import { calculateSavings } from './calculator.js';
+import { calculationReply, requestsCalculation } from './calculation-report.js';
 
 const apiBase = deployment.apiBaseUrl || (deployment.mode === 'server' ? new URL('./api/', import.meta.url).href : null);
 const apiUrl = name => new URL(name, apiBase).href;
@@ -11,8 +12,14 @@ const fmt = (n, digits = 1) => new Intl.NumberFormat('ru-RU', { maximumFractionD
 const selected = new Set(['procurement', 'production']);
 const defaults = { annualSpend:120, savingsPercent:8, implementationCost:2, monthlyCost:.1, rampMonths:4 };
 let currentCalculation, baseRate = 8, currentContext = {}, messages = [], config = { enabled:false, requiresAccessCode:true, providers:[] };
-let settings = { providerId:'softline', accessCode:'', temperature:.5 };
-let pending = false, requestController = null, requestVersion = 0, toastTimer;
+let settings = { providerId:'softline', accessCode:'', temperature:0 };
+let pending = false, requestController = null, requestVersion = 0, toastTimer, pendingMessage = null;
+function cancelPending(message = 'Предыдущий запрос остановлен.') {
+  if (!pending) return;
+  requestVersion++; requestController?.abort(); pending=false; requestController=null; $('#send-chat').disabled=false;
+  if (pendingMessage) pendingMessage.textContent=message;
+  pendingMessage=null;
+}
 
 function toast(text) {
   $('#toast').textContent = text; $('#toast').hidden = false;
@@ -53,6 +60,7 @@ function renderChart(series) {
   $('#cash-chart').replaceChildren(svg);
 }
 function updateCalculation() {
+  if (currentContext.calculator !== undefined) { cancelPending('Поля изменены. Подтвердите расчёт заново.'); currentContext = {}; $('#chat-context span').textContent = 'Поля изменены. Подтвердите расчёт заново.'; $('#clear-context').hidden = true; }
   $('#savings-output').textContent = fmt(Number($('#savingsPercent').value)) + '%';
   if (!$('#calc-form').checkValidity()) { $('#calc-error').textContent = 'Проверьте значения: нужны неотрицательные числа в допустимых пределах.'; currentCalculation = null; $('#first-year').textContent = '—'; $('#annual-net').textContent = '—'; $('#payback').textContent = '—'; $('#cash-chart').replaceChildren(); return; }
   try {
@@ -72,9 +80,10 @@ function fillInputs(values) {
   updateCalculation();
 }
 function setContext(type) {
+  cancelPending();
   currentContext = type === 'free' ? {} : { measureIds:[...selected] };
   if (type === 'calculator' && currentCalculation) currentContext.calculator = readInputs();
-  $('#chat-context span').textContent = type === 'free' ? 'Свободный диалог' : type === 'calculator' ? `Разбор расчёта · ${selected.size} мер · ${fmt(currentCalculation.firstYearNet,2)} млн ₽` : `Подбор программы · ${selected.size} мер`;
+  $('#chat-context span').textContent = type === 'free' ? 'Свободный диалог' : type === 'calculator' ? `Подтверждённые поля калькулятора · ${fmt(currentCalculation.firstYearNet,2)} млн ₽` : `Подбор программы · ${selected.size} мер`;
   $('#clear-context').hidden = type === 'free';
   $('#assistant').scrollIntoView({behavior:'smooth'});
 }
@@ -112,23 +121,31 @@ async function loadConfig() {
 async function sendMessage(event) {
   event.preventDefault(); if (pending) return;
   const content = $('#chat-input').value.trim(); if (!content) return;
-  if (!config.enabled) { toast('AI ещё не подключён на сервере. Откройте настройки для инструкции.'); $('#settings-dialog').showModal(); return; }
-  if (config.requiresAccessCode !== false && !settings.accessCode) { toast('Введите код доступа к ассистенту.'); $('#settings-dialog').showModal(); $('#access-code').focus(); return; }
-  if (!$('#ai-consent').checked) { toast('Подтвердите передачу диалога и контекста модели.'); $('#ai-consent').focus(); return; }
+  const deterministic = currentContext.calculator !== undefined || requestsCalculation(content);
+  if (!deterministic && !config.enabled) { toast('AI ещё не подключён на сервере. Откройте настройки для инструкции.'); $('#settings-dialog').showModal(); return; }
+  if (!deterministic && config.requiresAccessCode !== false && !settings.accessCode) { toast('Введите код доступа к ассистенту.'); $('#settings-dialog').showModal(); $('#access-code').focus(); return; }
+  if (!deterministic && !$('#ai-consent').checked) { toast('Подтвердите передачу диалога и контекста модели.'); $('#ai-consent').focus(); return; }
   const nextMessages = [...messages, {role:'user',content}];
   // Bound history by both count and characters; never retain hidden longer history in requests.
   while (nextMessages.length > 19 || nextMessages.reduce((n,m)=>n+m.content.length,0)>22000) nextMessages.shift();
   appendMessage('user',content); $('#chat-input').value='';
-  const loading = appendMessage('assistant','Проверяю допущения и готовлю ответ…');
-  pending = true; $('#send-chat').disabled=true;
-  const version=++requestVersion; requestController = new AbortController(); const timer=setTimeout(()=>requestController?.abort(),50000);
+  const loading = appendMessage('assistant', deterministic ? 'Считаю по формулам без обращения к модели…' : 'Готовлю непроверенный AI-совет…');
+  pending = true; pendingMessage=loading; $('#send-chat').disabled=true;
+  const version=++requestVersion; const controller = new AbortController(); requestController=controller; const timer=setTimeout(()=>controller.abort(),50000);
   try {
-    const response = await fetch(apiUrl('chat'),{method:'POST',headers:{'Content-Type':'application/json'},signal:requestController.signal,body:JSON.stringify({providerId:settings.providerId,...(config.requiresAccessCode !== false ? {accessCode:settings.accessCode} : {}),consent:true,messages:nextMessages,context:currentContext,temperature:settings.temperature})});
+    if (!apiBase && deterministic) {
+      const local = calculationReply(currentContext.calculator || {}); loading.textContent = local.content; loading.classList.add('calculation-message'); messages=[]; return;
+    }
+    const response = await fetch(apiUrl('chat'),{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({providerId:settings.providerId,...(config.requiresAccessCode !== false ? {accessCode:settings.accessCode} : {}),consent:$('#ai-consent').checked,...(deterministic ? {calculationOnly:true} : {}),messages:nextMessages,context:currentContext,temperature:settings.temperature})});
     const data = await response.json();
     if(version!==requestVersion) return;
     if(!response.ok) throw new Error(typeof data.error==='string'?data.error:'Ответ модели недоступен.');
     if(typeof data.content!=='string') throw new Error('Модель вернула пустой ответ.');
-    loading.textContent = data.content; messages = [...nextMessages,{role:'assistant',content:data.content}];
+    loading.textContent = data.content;
+    if (data.kind === 'calculation' || data.kind === 'calculation_inputs') {
+      loading.classList.add('calculation-message'); messages = [];
+      const button = document.createElement('button'); button.type='button'; button.className='calculation-open'; button.textContent='Проверить поля калькулятора'; button.addEventListener('click',()=>{ $('#calculator').scrollIntoView({behavior:'smooth'}); $('#annualSpend').focus({preventScroll:true}); }); loading.append(document.createElement('br'),button);
+    } else messages = [...nextMessages,{role:'assistant',content:data.content}];
     $('#ai-status').textContent = ''; $('#chat-messages').scrollTop=$('#chat-messages').scrollHeight;
   } catch(error) {
     if(version!==requestVersion) return;
@@ -136,7 +153,7 @@ async function sendMessage(event) {
     $('#chat-input').value=content;
   } finally {
     clearTimeout(timer);
-    if(version===requestVersion){pending=false;$('#send-chat').disabled=false;requestController=null;}
+    if(version===requestVersion){pending=false;$('#send-chat').disabled=false;requestController=null;pendingMessage=null;}
   }
 }
 function downloadPlan() {
@@ -155,7 +172,7 @@ $('#calc-form').addEventListener('input',event=>{if(event.target.id==='savingsPe
 $('#reset-calc').addEventListener('click',()=>{fillInputs(defaults);toast('Параметры расчёта сброшены.');});
 $$('[data-scenario]').forEach(button=>button.addEventListener('click',()=>{$('#savingsPercent').value=button.dataset.scenario==='conservative'?Math.round(baseRate*.6*2)/2:baseRate;$$('[data-scenario]').forEach(b=>b.classList.toggle('active',b===button));updateCalculation();}));
 $('#discuss-selection').addEventListener('click',()=>{if(!selected.size){toast('Выберите хотя бы одну меру.');return;}setContext('measures');$('#chat-input').value='Помоги расставить приоритеты по выбранным мерам и составить план. Сначала уточни недостающие данные.';$('#chat-input').focus({preventScroll:true});});
-$('#discuss-calc').addEventListener('click',()=>{if(!currentCalculation){toast('Исправьте параметры расчёта.');return;}setContext('calculator');$('#chat-input').value='Проверь мой расчёт и выбранные меры: реалистичность допущений, двойной счёт, риски и следующие шаги.';$('#chat-input').focus({preventScroll:true});});
+$('#discuss-calc').addEventListener('click',()=>{if(!currentCalculation){toast('Исправьте параметры расчёта.');return;}setContext('calculator');messages=[];$('#chat-input').value='Покажи результат по подтверждённым полям калькулятора.';$('#chat-form').requestSubmit();});
 $('#clear-context').addEventListener('click',()=>{setContext('free');toast('Новый контекст не передаётся. Чтобы удалить прежние данные из истории, очистите диалог.');});
 $('#download-plan').addEventListener('click',downloadPlan);
 $$('[data-prompt]').forEach(button=>button.addEventListener('click',()=>{$('#chat-input').value=button.dataset.prompt;$('#chat-input').focus();}));

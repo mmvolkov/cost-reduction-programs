@@ -75,7 +75,7 @@ export async function diagnoseAI({ env = process.env, fetchImpl = globalThis.fet
       body: JSON.stringify({
         providerId: 'softline', consent: true, accessCode: env.AI_ACCESS_CODE || '',
         messages: [{ role: 'user', content: 'Ответь одним словом: OK' }],
-        context: {}, temperature: 0.5,
+        context: {}, temperature: 0,
       }),
     });
     result.application_http = response.status;
