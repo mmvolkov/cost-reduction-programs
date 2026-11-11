@@ -5,6 +5,7 @@
 !compose.yaml
 !package.json
 !server.mjs
+!diagnose-ai.mjs
 !lib/
 !lib/**
 !public/

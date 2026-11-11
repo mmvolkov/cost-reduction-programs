@@ -1,7 +1,7 @@
 # Official Node.js LTS image. Pin an audited digest when promoting production releases.
 FROM node:24-bookworm-slim AS checked
 WORKDIR /app
-COPY package.json server.mjs Dockerfile .dockerignore compose.yaml ./
+COPY package.json server.mjs diagnose-ai.mjs Dockerfile .dockerignore compose.yaml ./
 COPY lib/ ./lib/
 COPY public/ ./public/
 COPY test/ ./test/
