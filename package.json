@@ -1,0 +1,14 @@
+{
+  "name": "cost-reduction-programs",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Практикум по снижению затрат с калькулятором и защищённым AI-ассистентом",
+  "engines": { "node": ">=22.9" },
+  "scripts": {
+    "dev": "node server.mjs",
+    "start": "node --env-file-if-exists=.env server.mjs",
+    "test": "node --test",
+    "check": "node --check server.mjs && node --check public/app.js && node --check public/calculator.js && node --test"
+  }
+}
