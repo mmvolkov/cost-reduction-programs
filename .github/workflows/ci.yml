@@ -1,7 +1,7 @@
 name: Checks
 on:
   push:
-    branches: [main]
+    branches: [main, codex/program-management-p1]
   pull_request:
   workflow_dispatch:
 permissions:

@@ -2,6 +2,7 @@ import { deployment } from './runtime-config.js';
 import { measures, cases, industries } from './data.js';
 import { calculateSavings } from './calculator.js';
 import { calculationReply, requestsCalculation } from './calculation-report.js';
+import { initProgramWorkspace } from './program-ui.js';
 
 const apiBase = deployment.apiBaseUrl || (deployment.mode === 'server' ? new URL('./api/', import.meta.url).href : null);
 const apiUrl = name => new URL(name, apiBase).href;
@@ -9,7 +10,9 @@ const apiUrl = name => new URL(name, apiBase).href;
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const fmt = (n, digits = 1) => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: digits }).format(n);
-const selected = new Set(['procurement', 'production']);
+// Only library IDs are shared with the existing opt-in AI context.
+// Saved program inputs, execution cards and facts never enter that context.
+const selected = new Set();
 const defaults = { annualSpend:120, savingsPercent:8, implementationCost:2, monthlyCost:.1, rampMonths:4 };
 let currentCalculation, baseRate = 8, currentContext = {}, messages = [], config = { enabled:false, requiresAccessCode:true, providers:[] };
 let settings = { providerId:'softline', accessCode:'', temperature:0 };
@@ -182,9 +185,12 @@ async function downloadPlan() {
 }
 
 renderMeasures();renderCases();updateCalculation();loadConfig();
-$('#measure-grid').addEventListener('click',event=>{const b=event.target.closest('.measure-select');if(!b)return;selected.has(b.dataset.id)?selected.delete(b.dataset.id):selected.add(b.dataset.id);updateSelection();});
+const programWorkspace = initProgramWorkspace($('#program-workspace'), { onSelectionChange(ids) {
+  selected.clear(); ids.forEach(id => selected.add(id)); updateSelection();
+} });
+$('#measure-grid').addEventListener('click',event=>{const b=event.target.closest('.measure-select');if(!b)return;programWorkspace.toggleMeasure(b.dataset.id);});
 $$('[data-filter]').forEach(button=>button.addEventListener('click',()=>{$$('[data-filter]').forEach(b=>{b.classList.toggle('active',b===button);b.setAttribute('aria-pressed',String(b===button));});$$('.measure-card').forEach(card=>{card.hidden=button.dataset.filter!=='Все'&&card.dataset.category!==button.dataset.filter;});}));
-$('#case-grid').addEventListener('click',event=>{const b=event.target.closest('[data-case]');if(!b)return;const c=cases.find(x=>x.id===b.dataset.case);selected.clear();c.measures.forEach(id=>selected.add(id));updateSelection();fillInputs({annualSpend:c.spend,savingsPercent:c.rate,implementationCost:c.investment,monthlyCost:c.monthly,rampMonths:c.ramp});$('#calculator').scrollIntoView({behavior:'smooth'});toast('Условный сценарий загружен. Замените допущения своими.');});
+$('#case-grid').addEventListener('click',event=>{const b=event.target.closest('[data-case]');if(!b)return;const c=cases.find(x=>x.id===b.dataset.case);fillInputs({annualSpend:c.spend,savingsPercent:c.rate,implementationCost:c.investment,monthlyCost:c.monthly,rampMonths:c.ramp});$('#calculator').scrollIntoView({behavior:'smooth'});toast('Учебный расчёт загружен. Сохранённая рабочая программа не изменена.');});
 $('#calc-form').addEventListener('submit',event=>event.preventDefault());
 $('#calc-form').addEventListener('input',event=>{if(event.target.id==='savingsPercent'){baseRate=Number(event.target.value);$$('[data-scenario]').forEach(b=>b.classList.toggle('active',b.dataset.scenario==='base'));}updateCalculation();});
 $('#reset-calc').addEventListener('click',()=>{fillInputs(defaults);toast('Параметры расчёта сброшены.');});
@@ -204,4 +210,4 @@ $('#clear-chat').addEventListener('click',()=>{requestVersion++;requestControlle
 
 industries.forEach(item=>{ const option=document.createElement('option');option.value=item.id;option.textContent=item.title;$('#industry-select').append(option); });
 $('#industry-select').addEventListener('change',()=>{const item=industries.find(i=>i.id===$('#industry-select').value);$('#apply-industry').hidden=!item;if(!item){$('#industry-note').textContent='Подберите направления для своей отрасли и проверьте их на ваших данных.';return;}const title=document.createElement('strong');title.textContent=item.focus;const p=document.createElement('p');p.textContent=item.guard+' Контроль: '+item.metric;$('#industry-note').replaceChildren(title,p);});
-$('#apply-industry').addEventListener('click',()=>{const item=industries.find(i=>i.id===$('#industry-select').value);if(!item)return;selected.clear();item.measures.forEach(id=>selected.add(id));updateSelection();toast('Типовые меры выбраны. Это гипотезы для проверки, не готовый диагноз.');});
+$('#apply-industry').addEventListener('click',()=>{const item=industries.find(i=>i.id===$('#industry-select').value);if(!item)return;item.measures.forEach(id=>programWorkspace.addMeasure(id));toast('Типовые меры добавлены без изменения существующих данных. Заполните независимые параметры каждой меры.');});

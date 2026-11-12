@@ -11,7 +11,7 @@
     "dev": "node server.mjs",
     "start": "node --env-file-if-exists=.env server.mjs",
     "test": "node --test",
-    "check": "node --check server.mjs && node --check diagnose-ai.mjs && node --check public/app.js && node --check public/calculator.js && node --test",
+    "check": "node --check server.mjs && node --check diagnose-ai.mjs && node --check public/app.js && node --check public/calculator.js && node --check public/program-model.js && node --check public/program-storage.js && node --check public/program-report.js && node --check public/program-ui.js && node --test",
     "ai:init": "node --env-file-if-exists=.env scripts/init-ai-budget.mjs"
   }
 }

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createReport, exportReport, reportText, reportHtml, exportFormats } from '../public/report-export.js';
 import { measures } from '../public/data.js';
+import { inflateSync } from 'node:zlib';
 const input={annualSpend:12,savingsPercent:10,implementationCost:.2,monthlyCost:.02,rampMonths:0};
 const getBytes=async f=>new Uint8Array(await f.blob.arrayBuffer());
 function storedZipEntries(bytes){const v=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength),out={};let pos=0;while(v.getUint32(pos,true)===0x04034b50){assert.equal(v.getUint16(pos+8,true),0);const size=v.getUint32(pos+18,true),n=v.getUint16(pos+26,true),extra=v.getUint16(pos+28,true);const name=new TextDecoder().decode(bytes.subarray(pos+30,pos+30+n)),start=pos+30+n+extra;out[name]=new TextDecoder().decode(bytes.subarray(start,start+size));pos=start+size;}assert.equal(v.getUint32(pos,true),0x02014b50);assert.equal(v.getUint32(bytes.length-22,true),0x06054b50);return out;}
@@ -37,4 +38,21 @@ test('PDF is a true document with embedded Unicode fonts and no active actions',
 });
 test('export ignores tampered report prose and values and rejects unsupported formats',async()=>{
  const r=createReport(input,[]);const f=await exportReport({...r,blocks:[{text:'<script>secret</script>'}],calculation:{firstYearNet:999}},'html');const text=await f.blob.text();assert.match(text,/0,76 млн ₽/);assert.doesNotMatch(text,/secret|999/);await assert.rejects(exportReport(r,'exe'));
+});
+test('PDF heading keeps its trailing gap and following body lines together at a page boundary',async()=>{
+ const {buildPdf}=await import('../public/report-export-pdf.js');
+ // 28 body rows + two subtitles leave y=722pt. A heading without its
+ // trailing 8pt gap fits the old check, but its following paragraph does not.
+ const blocks=[...Array.from({length:28},()=>({type:'paragraph',text:'Строка'})),
+   {type:'subtitle',text:'Подпись'},{type:'subtitle',text:'Подпись'},
+   {type:'heading',text:'Методика и ограничения'},
+   {type:'paragraph',text:'Следующий абзац должен остаться вместе с заголовком. '.repeat(5)}];
+ const raw=Buffer.from(await buildPdf({blocks})).toString('latin1');
+ const contents=[...raw.matchAll(/\/Type \/Page\b[\s\S]*?\/Contents (\d+) 0 R/g)].map(m=>m[1]);
+ assert.equal(contents.length,2);
+ const stream=id=>{const body=raw.match(new RegExp('(?:^|\\n)'+id+' 0 obj\\n([\\s\\S]*?)\\nendobj'))[1];const bytes=body.match(/stream\n([\s\S]*?)\nendstream/)[1];return inflateSync(Buffer.from(bytes,'latin1')).toString('latin1');};
+ // Only the heading uses 14pt; it must be on the second page with body text.
+ assert.doesNotMatch(stream(contents[0]),/\s14 Tf/);
+ assert.match(stream(contents[1]),/\s14 Tf/);
+ assert.match(stream(contents[1]),/\s10\.5 Tf/);
 });

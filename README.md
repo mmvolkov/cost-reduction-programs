@@ -105,10 +105,16 @@ npm run check
 
 Workflow `pages.yml` проверяет код и публикует **только public/** после push/merge в main. Секреты, сервер и .env в Pages artifact не входят. До подключения backend это честно обозначенная статическая демонстрация: материалы, калькулятор и экспорт работают, AI отключен.
 
-После проверенного запуска backend администратор задает GitHub repository variable `PUBLIC_API_BASE_URL=https://scout-argument.ru/cost-reduction-programs/api/` и повторно запускает Pages. Это публичный адрес, не секрет. Для backend нужны `BASE_PATH=/cost-reduction-programs`, `PUBLIC_ORIGIN=https://scout-argument.ru`, `CORS_ALLOWED_ORIGINS=https://mmvolkov.github.io`. CORS разрешает только этот точный origin, не wildcard; авторизация отдельным кодом остается обязательной.
+После проверенного запуска backend администратор задает GitHub repository variable `PUBLIC_API_BASE_URL=https://scout-argument.ru/cost-reduction-programs/api/` и повторно запускает Pages. Это публичный адрес, не секрет. Для backend нужны `BASE_PATH=/cost-reduction-programs`, `PUBLIC_ORIGIN=https://scout-argument.ru`, `CORS_ALLOWED_ORIGINS=https://mmvolkov.github.io`. CORS разрешает только этот точный origin, не wildcard. Режим доступа задаётся на сервере: в закрытом режиме требуется код, в явно включённом публичном режиме действуют общий устойчивый бюджет и ограничения запросов.
 
 Статус серверного развертывания и безопасная схема: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Наличие workflow Pages не означает, что серверная копия развернута.
 
 ## Docker на сервере
 
 Добавлены Dockerfile и compose.yaml для отдельного непривилегированного контейнера. Команды и ограничения: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). CI проверяет build и изолированный smoke test; деплой в Облакотеку сам по себе не включен.
+
+## Рабочие программы P1
+
+Новый раздел «Программы» сохраняет несколько независимых программ в этом браузере: параметры каждой меры, исполнение и месячный план-факт. Есть версии JSON для переноса и отчёты TXT/HTML/PDF/DOCX. Учебные кейсы не заменяют рабочие данные. Неполные параметры и непроверенные пересечения не выдаются за достоверный итог; финансовые результаты считает код, не AI.
+
+[Сохранение, методика, ограничения и проверка P1](docs/PROGRAM-MANAGEMENT.md). Изменения проходят PR и полный CI (Node.js 22/24, Docker build и smoke test), затем сливаются в `main`. Успешный workflow Pages публикует статическую версию; сервер Scout обновляется отдельно по [инструкции развертывания](docs/DEPLOYMENT.md).

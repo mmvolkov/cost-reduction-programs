@@ -15,7 +15,9 @@ export async function buildPdf(report) {
     doc.setTextColor(...(block.type==='heading'?[0,130,65]:block.type==='subtitle'?[71,85,105]:[17,24,39]));
     const lines=doc.splitTextToSize(block.text,width-2*margin);
     const isHeading=block.type==='heading'||block.type==='subheading';
-    const need=(isHeading?lines.length*style.line+32:Math.min(lines.length*style.line,32))+(style.before||0);
+    // Keep a heading's trailing gap as well as two following body lines on
+    // this page. Omitting the gap can strand a heading just above a page break.
+    const need=(isHeading?lines.length*style.line+style.gap+32:Math.min(lines.length*style.line,32))+(style.before||0);
     if(y+need>bottom)nextPage();else if(y>margin)y+=style.before||0;
     for(const line of lines) {if(y+style.line>bottom)nextPage();doc.text(line,margin,y+style.size);y+=style.line;}
     y+=style.gap;
