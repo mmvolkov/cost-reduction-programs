@@ -25,3 +25,16 @@ test('page anchors and local assets exist; no duplicate ids or inline scripts/st
   for (const match of html.matchAll(/(?:src|href)="(\/[^"#]+)"/g)) await access(new URL('../public'+match[1], import.meta.url));
   assert.doesNotMatch(html, /<script(?![^>]+src=)[^>]*>|\bstyle="|\bonclick="/i);
 });
+
+test('report export offers four explicit formats and loads generators only when requested', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const select = html.match(/<select id="export-format"[^>]*>([\s\S]*?)<\/select>/)?.[1];
+  assert.ok(select);
+  assert.deepEqual([...select.matchAll(/<option value="([^"]+)"/g)].map(m=>m[1]), ['txt','html','pdf','docx']);
+  assert.match(html, /<label for="export-format">/);
+  assert.match(app, /await import\('\.\/report-export\.js'\)/);
+  assert.match(app, /if \(exporting\) return/);
+  assert.match(app, /profile\.id === 'softline' \? 'Local' : profile\.label/);
+  assert.match(html, /Данные отчёта не отправляются на сервер/);
+});

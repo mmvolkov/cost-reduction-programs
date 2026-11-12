@@ -26,7 +26,7 @@ test('valid flow uses only configured endpoint/model/key and bounded context', a
   const response = await post(); assert.equal(response.status, 200); assert.deepEqual(await response.json(), { kind:'ai_advice', content: AI_NOTICE + '\n\nОтвет', model: 'qwen3.8-27b-nvfp4' });
   assert.equal(seen.url, 'https://api.ai-assistants.softline.com/v1/chat/completions'); assert.equal(seen.options.redirect, 'error');
   assert.equal(JSON.parse(seen.options.body).max_tokens, 1000);
-  const config = await (await fetch(url + '/api/config')).json(); assert.equal(config.enabled, true); assert.deepEqual(Object.keys(config.providers[0]), ['id', 'label', 'model']); assert.ok(!JSON.stringify(config).includes(env.AI_API_KEY));
+  const config = await (await fetch(url + '/api/config')).json(); assert.equal(config.enabled, true); assert.equal(config.providers[0].label, 'Local'); assert.equal(config.providers[0].id, 'softline'); assert.deepEqual(Object.keys(config.providers[0]), ['id', 'label', 'model']); assert.ok(!JSON.stringify(config).includes(env.AI_API_KEY));
 });
 test('wrong access and missing consent are rejected', async t => { const { post } = await fixture(t); assert.equal((await post({ ...payload, accessCode: 'wrong' })).status, 401); assert.equal((await post({ ...payload, consent: false })).status, 400); });
 test('disabled unless both access code and key are configured', async t => { const { post, url } = await fixture(t, { AI_ACCESS_CODE: '' }); assert.equal((await post()).status, 503); assert.equal((await (await fetch(url + '/api/config')).json()).enabled, false); });

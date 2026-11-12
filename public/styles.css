@@ -211,6 +211,13 @@ input[type=range] { display: block; width: 100%; min-height: 44px; margin: var(-
 .white-button { width: 100%; justify-content: space-between; margin-top: var(--space-5); background: var(--surface); color: var(--ink); }
 .white-button:hover { background: #e2e8f0; }
 .download-button { width: 100%; min-height: 44px; margin-top: var(--space-1); padding: var(--space-2) 0; border: 0; background: none; color: #fff; font-size: var(--text-note); font-weight: 600; line-height: 1.5; }
+.report-export { margin-top: var(--space-4); }
+.report-export > label { color: #fff; margin-bottom: var(--space-1); }
+.report-export-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-2); align-items: stretch; }
+.report-export select { width: 100%; min-width: 0; }
+.report-export .report-export-button { margin: 0; min-height: 48px; padding: var(--space-2); border: 1px solid #64748b; border-radius: var(--radius-control); }
+.report-export .report-export-button:hover { background: #1e293b; }
+.export-note { margin-top: var(--space-1); color: #cbd5e1; font-size: var(--text-small); line-height: 1.5; }
 .result-disclaimer { margin-top: var(--space-2); color: #cbd5e1; font-size: var(--text-note); line-height: 1.6; }
 .methodology { margin-top: var(--space-4); padding-block: var(--space-1); border-bottom: 1px solid var(--line); font-size: var(--text-body); }
 .methodology div { max-width: 1000px; padding-top: var(--space-2); padding-bottom: var(--space-3); color: var(--muted); font-size: var(--text-body); line-height: 1.65; }
@@ -351,6 +358,7 @@ dialog .button { width: 100%; margin-top: var(--space-4); }
   .calc-form, .calc-result { padding: var(--space-4); }
   .input-row { grid-template-columns: 1fr; gap: 0; }
   .result-stats { grid-template-columns: 1fr; gap: var(--space-4); }
+  .report-export-controls { grid-template-columns: 1fr; }
   .chat-header, .chat-messages, #chat-form { padding: var(--space-3); }
   .chat-context, .ai-status { padding-inline: var(--space-3); }
   .chat-suggestions { padding-inline: var(--space-3); }

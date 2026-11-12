@@ -7,6 +7,8 @@ test('Docker runtime stays non-root and excludes secret material', async () => {
  assert.match(dockerfile,/USER node/); assert.match(dockerfile,/RUN npm run check/);
  assert.doesNotMatch(dockerfile,/COPY\s+\.\s/);
  assert.match(ignore,/^\*\*$/m); assert.doesNotMatch(ignore,/^!\.env/m);
+ assert.match(ignore,/^\*\*\/node_modules$/m);
+ assert.ok(ignore.indexOf('**/node_modules') > ignore.indexOf('!scripts/**'));
 });
 test('Compose confines routing to the approved host and exact path prefix', async () => {
  const compose=await read('compose.yaml');
