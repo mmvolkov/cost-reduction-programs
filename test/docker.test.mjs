@@ -9,6 +9,12 @@ test('Docker runtime stays non-root and excludes secret material', async () => {
  assert.match(ignore,/^\*\*$/m); assert.doesNotMatch(ignore,/^!\.env/m);
  assert.match(ignore,/^\*\*\/node_modules$/m);
  assert.ok(ignore.indexOf('**/node_modules') > ignore.indexOf('!scripts/**'));
+ assert.match(ignore,/^!\.github\/workflows\/ci\.yml$/m);
+ assert.match(ignore,/^!\.github\/workflows\/pages\.yml$/m);
+ const [checked,runtime] = dockerfile.split('FROM node:24-bookworm-slim AS runtime');
+ assert.match(checked,/COPY \.github\/workflows\/ci\.yml \.github\/workflows\/pages\.yml \.\/\.github\/workflows\//);
+ assert.doesNotMatch(runtime,/COPY[^\n]*\.github/);
+ assert.match(await read('scripts/docker-smoke.sh'),/"\.github"/);
 });
 test('Compose confines routing to the approved host and exact path prefix', async () => {
  const compose=await read('compose.yaml');

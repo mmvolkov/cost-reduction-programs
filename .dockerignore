@@ -14,6 +14,11 @@
 !test/**
 !scripts/
 !scripts/**
+# Public workflow fixtures are read by integration tests in the checked stage only.
+!.github/
+!.github/workflows/
+!.github/workflows/ci.yml
+!.github/workflows/pages.yml
 # Optional vendoring tools never enter the Docker build context.
 **/node_modules
 **/node_modules/**
