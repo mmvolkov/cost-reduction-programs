@@ -6,6 +6,7 @@ COPY lib/ ./lib/
 COPY public/ ./public/
 COPY test/ ./test/
 COPY scripts/ ./scripts/
+COPY .github/workflows/ci.yml .github/workflows/pages.yml ./.github/workflows/
 RUN npm run check
 
 FROM node:24-bookworm-slim AS runtime

@@ -1,0 +1,75 @@
+/* Scoped workspace styles. No changes to the quick calculator or AI. */
+.program-workspace { --pm-space:24px; overflow-wrap:anywhere; }
+.program-workspace :is(input,select,textarea,button) { font:inherit; }
+.program-workspace :is(input,select,textarea) { font-size:16px; }
+.program-workspace :is(p,li,label) { line-height:1.6; }
+.pm-panel,.pm-measure { background:#fff; border:1px solid var(--line,#e2e8f0); border-radius:20px; padding:24px; margin-top:24px; box-shadow:0 8px 24px rgb(15 23 42 / 3%); min-width:0; }
+.pm-toolbar { display:flex; align-items:end; flex-wrap:wrap; gap:12px; margin:24px 0; }
+.pm-toolbar>.pm-field { flex:1 1 260px; }
+.pm-button { background:#fff; color:#111827; border:1px solid #cbd5e1; border-radius:12px; padding:12px 16px; min-height:48px; font-weight:600!important; line-height:1.4; overflow-wrap:anywhere; }
+.pm-button:hover { border-color:#009a4d; background:#f8fafc; }
+.pm-button:focus-visible,.program-workspace :is(input,select,textarea,summary):focus-visible { outline:3px solid #009a4d; outline-offset:3px; }
+.pm-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; }
+.pm-full { grid-column:1/-1; }
+.pm-field { display:flex; flex-direction:column; gap:8px; min-width:0; font-size:14px; font-weight:600; }
+.pm-field :is(input,select,textarea) { border:1px solid #cbd5e1; border-radius:10px; padding:11px 12px; min-height:48px; background:#fff; color:#111827; width:100%; min-width:0; font-weight:400; line-height:1.5; }
+.pm-field textarea { resize:vertical; }
+.pm-field small,.pm-help { font-size:14px; font-weight:400; color:#475569; line-height:1.6; }
+.pm-field input:invalid { border-color:#b45309; }
+.pm-notice,.pm-warning { padding:16px; border-radius:12px; margin:16px 0; font-size:14px; }
+.pm-notice { background:#f8fafc; color:#475569; border:1px solid #e2e8f0; }
+.pm-warning { background:#fffbeb; color:#78350f; border:1px solid #fde68a; }
+.pm-message { min-height:24px; color:#78350f; font-size:14px; margin:8px 0; }
+.pm-save-status { color:#475569; font-size:14px; margin-top:12px; }
+.pm-save-status[data-state=saved] { color:#166534; }
+.pm-save-status:is([data-state=corrupt],[data-state=quota],[data-state=unavailable],[data-state=conflict]) { color:#92400e; font-weight:600; }
+.pm-check { display:flex; align-items:flex-start; gap:12px; padding:12px 0; font-size:15px; font-weight:400; cursor:pointer; }
+.pm-check input { flex:0 0 22px; width:22px; height:22px; margin:2px 0 0; accent-color:#009a4d; }
+.pm-measure { padding:0; overflow:hidden; }
+.pm-measure>summary { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:24px; cursor:pointer; font-size:20px; font-weight:700; list-style:revert; }
+.pm-measure>summary::after { content:'+'; font-size:24px; font-weight:400; }
+.pm-measure[open]>summary::after { content:'−'; }
+.pm-measure>summary>span:first-child { flex:1; }
+.pm-badge { font-size:12px; font-weight:600; background:#f1f5f9; border-radius:8px; padding:6px 10px; }
+.pm-measure-body { padding:0 24px 24px; }
+.pm-measure-body>.pm-help { margin-bottom:24px; }
+.pm-measure-body>.pm-grid { margin:16px 0; }
+.pm-execution { border-top:1px solid #e2e8f0; margin-top:24px; padding-top:16px; }
+.pm-execution>summary,.pm-recovery>summary { font-weight:600; cursor:pointer; padding:12px 0; min-height:44px; }
+.pm-execution>.pm-grid { margin-top:16px; }
+.pm-execution h4 { margin:24px 0 12px; font-size:16px; }
+.pm-execution ol { padding-left:24px; }
+.pm-summary>h3,.pm-facts>h3,.pm-export>h3 { margin-bottom:16px; }
+.pm-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin:24px 0; }
+.pm-metrics>div { display:flex; flex-direction:column; gap:12px; padding:16px; border:1px solid #e2e8f0; border-radius:12px; min-width:0; }
+.pm-metrics span { font-size:14px; color:#475569; }
+.pm-metrics strong { font-size:24px; line-height:1.25; overflow-wrap:anywhere; }
+.pm-table-scroll { overflow-x:auto; margin-top:16px; max-width:100%; border:1px solid #e2e8f0; border-radius:12px; }
+.pm-table-scroll table { border-collapse:collapse; min-width:650px; width:100%; font-size:14px; }
+.pm-table-scroll :is(th,td) { padding:12px; border-bottom:1px solid #e2e8f0; text-align:right; font-variant-numeric:tabular-nums; }
+.pm-table-scroll th:first-child { text-align:left; }
+.pm-table-scroll thead { background:#f8fafc; }
+.pm-table-scroll tbody th { font-weight:400; }
+.pm-actual-summary { margin-top:24px; padding-top:24px; border-top:1px solid #e2e8f0; }
+.pm-actual-summary h4 { margin:0 0 12px; font-size:18px; }
+.pm-actual-summary p { margin-top:12px; }
+.pm-facts>.pm-grid { margin:16px 0; }
+.pm-fact-result { background:#f8fafc; padding:16px; border-radius:12px; margin:16px 0; }
+.pm-fact-result p { margin-top:8px; font-size:14px; }
+.pm-export { display:flex; align-items:end; flex-wrap:wrap; gap:16px; }
+.pm-export>h3,.pm-export>p { width:100%; margin:0; }
+.pm-export>.pm-field { flex:1 1 220px; }
+.pm-export>.pm-button { background:#009a4d; color:#fff; border-color:#009a4d; }
+.pm-export>.pm-button:hover { background:#008241; }
+.pm-recovery { border:1px solid #fde68a; padding:16px; border-radius:12px; }
+.pm-recovery p { margin-bottom:16px; }
+.pm-empty { background:#f8fafc; padding:24px; border-radius:12px; }
+@media(max-width:760px) { .pm-grid { grid-template-columns:1fr; gap:16px; } .pm-metrics { grid-template-columns:1fr; } .pm-panel { padding:20px; } .pm-measure>summary { padding:20px; flex-wrap:wrap; font-size:18px; } .pm-measure-body { padding:0 20px 20px; } .pm-toolbar>.pm-button { flex:1 1 140px; } }
+@media(max-width:420px) { .pm-panel { padding:16px; } .pm-measure>summary { padding:16px; } .pm-measure-body { padding:0 16px 16px; } .pm-badge { max-width:100%; } .pm-toolbar>.pm-button { flex-basis:100%; } .pm-export>.pm-button { width:100%; } }
+.pm-own-result { padding:16px; border-radius:12px; background:#f8fafc; margin:16px 0; font-size:15px; }
+.pm-own-result p { margin-top:8px; }
+.pm-action-plan { margin-top:24px; padding-top:16px; border-top:1px solid #e2e8f0; }
+.pm-action-plan summary { cursor:pointer; min-height:44px; padding:10px 0; font-weight:600; }
+.pm-action-plan h4 { font-size:16px; margin:20px 0 8px; }
+.pm-action-plan ul { padding-left:24px; }
+.pm-action-plan li { margin:8px 0; }

@@ -17,7 +17,7 @@ done
 docker exec "$name" node --input-type=module -e '
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-for (const file of [".env",".git","test","compose.yaml"]) assert.equal(existsSync("/app/"+file),false,file);
+for (const file of [".env",".git",".github","test","compose.yaml"]) assert.equal(existsSync("/app/"+file),false,file);
 const root="http://127.0.0.1:3000";
 assert.equal(process.getuid(),1000);
 for (const asset of ["/","/app.js","/styles.css","/runtime-config.js"]) {

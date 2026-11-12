@@ -2,6 +2,7 @@ import { deployment } from './runtime-config.js';
 import { measures, cases, industries } from './data.js';
 import { calculateSavings } from './calculator.js';
 import { calculationReply, requestsCalculation } from './calculation-report.js';
+import { initProgramWorkspace } from './program-ui.js';
 
 const apiBase = deployment.apiBaseUrl || (deployment.mode === 'server' ? new URL('./api/', import.meta.url).href : null);
 const apiUrl = name => new URL(name, apiBase).href;
@@ -9,10 +10,13 @@ const apiUrl = name => new URL(name, apiBase).href;
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const fmt = (n, digits = 1) => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: digits }).format(n);
-const selected = new Set(['procurement', 'production']);
+// Only library IDs are shared with the existing opt-in AI context.
+// Saved program inputs, execution cards and facts never enter that context.
+const selected = new Set();
 const defaults = { annualSpend:120, savingsPercent:8, implementationCost:2, monthlyCost:.1, rampMonths:4 };
 let currentCalculation, baseRate = 8, currentContext = {}, messages = [], config = { enabled:false, requiresAccessCode:true, providers:[] };
 let settings = { providerId:'softline', accessCode:'', temperature:0 };
+let exporting = false;
 let pending = false, requestController = null, requestVersion = 0, toastTimer, pendingMessage = null;
 function cancelPending(message = 'Предыдущий запрос остановлен.') {
   if (!pending) return;
@@ -92,9 +96,10 @@ function appendMessage(role, content, extra = '') {
   $('#chat-messages').append(div); $('#chat-messages').scrollTop = $('#chat-messages').scrollHeight;
   return div;
 }
+function providerLabel(profile) { return profile.id === 'softline' ? 'Local' : profile.label; }
 function updateModelLabel() {
   const profile = config.providers.find(p => p.id === settings.providerId);
-  $('#model-label').textContent = profile ? `${profile.label} · ${profile.model}` : 'Qwen · требуется настройка сервера';
+  $('#model-label').textContent = profile ? `${providerLabel(profile)} · ${profile.model}` : 'Qwen · требуется настройка сервера';
 }
 async function loadConfig() {
   if (!apiBase) {
@@ -107,7 +112,7 @@ async function loadConfig() {
     config = await response.json();
     if (!Array.isArray(config.providers)) throw new Error();
     const select = $('#provider-select'); select.replaceChildren();
-    config.providers.forEach(p => { const opt = document.createElement('option'); opt.value=p.id; opt.textContent=`${p.label} · ${p.model}`; select.append(opt); });
+    config.providers.forEach(p => { const opt = document.createElement('option'); opt.value=p.id; opt.textContent=`${providerLabel(p)} · ${p.model}`; select.append(opt); });
     if (!config.providers.length) { const opt=document.createElement('option'); opt.value=''; opt.textContent='Нет настроенных подключений'; select.append(opt); }
     settings.providerId = config.providers.some(p=>p.id===settings.providerId) ? settings.providerId : config.providers[0]?.id || '';
     select.value = settings.providerId;
@@ -156,17 +161,36 @@ async function sendMessage(event) {
     if(version===requestVersion){pending=false;$('#send-chat').disabled=false;requestController=null;pendingMessage=null;}
   }
 }
-function downloadPlan() {
-  if(!currentCalculation){toast('Сначала исправьте параметры расчёта.');return;}
-  const r=currentCalculation;
-  const lines=['ПРОГРАММА СНИЖЕНИЯ ЗАТРАТ','Расчётный сценарий, не прогноз и не гарантия результата.','',`База расходов: ${fmt(r.annualSpend,2)} млн ₽/год`,`Снижение: ${fmt(r.savingsPercent)}%`,`Запуск: ${fmt(r.implementationCost,2)} млн ₽`,`Поддержка: ${fmt(r.monthlyCost,2)} млн ₽/месяц`,`Линейный разгон: ${fmt(r.rampMonths)} месяцев`,'',`Первый год: ${fmt(r.firstYearNet,2)} млн ₽`,`Чистый годовой эффект на полном ходу: ${fmt(r.annualNet,2)} млн ₽`,`Окупаемость: ${r.paybackMonths===null?'не достигнута за 120 месяцев':fmt(r.paybackMonths)+' месяцев'}`,'','ВЫБРАННЫЕ МЕРЫ',...measures.filter(m=>selected.has(m.id)).flatMap(m=>[m.title,...m.steps.map((s,i)=>`${i+1}. ${s}`),`Метрика: ${m.metric}`,`Ограничение: ${m.guard}`,'Владелец: __________  Срок: __________','']),'ПЛАН 30/60/90','1–30: база расходов, владельцы, 3–5 гипотез, ограничения качества.','31–60: пилот, сверка факта с базой, учёт внедрения и пересечений.','61–90: масштабирование подтверждённого результата и ежемесячная проверка.','','МЕСЯЧНЫЙ НАКОПЛЕННЫЙ ЭФФЕКТ',...r.series.map(p=>`${p.month}: ${fmt(p.accumulated,3)} млн ₽`),'','МЕТОДИКА','Экономия растёт линейно в период разгона; в месяце используется средняя точка. Поддержка оплачивается с первого месяца, затраты запуска возникают в начале. Налоги, сезонность, стоимость капитала и изменение объёмов не моделируются. Высвобождение запасов и часов считается отдельно. Проверьте влияние на выручку и маржу.','Сделано в проекте cost-reduction-programs.'];
-  const url=URL.createObjectURL(new Blob(['\uFEFF'+lines.join('\n')],{type:'text/plain;charset=utf-8'}));
-  const link=document.createElement('a');link.href=url;link.download='cost-reduction-plan.txt';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);toast('Расчёт и план скачаны.');
+async function downloadPlan() {
+  if (exporting) return;
+  if (!currentCalculation || !$('#calc-form').checkValidity()) { toast('Сначала исправьте параметры расчёта.'); return; }
+  const input = { ...readInputs() }, measureIds = [...selected], format = $('#export-format').value;
+  const button = $('#download-plan'), select = $('#export-format');
+  const previousLabel = button.textContent;
+  exporting = true; button.disabled = true; select.disabled = true; button.setAttribute('aria-busy', 'true'); button.textContent = 'Готовлю файл…';
+  try {
+    const { createReport, exportReport } = await import('./report-export.js');
+    const report = createReport(input, measureIds);
+    const { blob, filename } = await exportReport(report, format);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a'); link.href = url; link.download = filename;
+    document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    toast(`Отчёт ${format.toUpperCase()} подготовлен для скачивания.`);
+  } catch {
+    toast('Не удалось подготовить файл. Повторите попытку или выберите TXT.');
+  } finally {
+    exporting = false; button.disabled = false; select.disabled = false; button.removeAttribute('aria-busy'); button.textContent = previousLabel;
+  }
 }
+
 renderMeasures();renderCases();updateCalculation();loadConfig();
-$('#measure-grid').addEventListener('click',event=>{const b=event.target.closest('.measure-select');if(!b)return;selected.has(b.dataset.id)?selected.delete(b.dataset.id):selected.add(b.dataset.id);updateSelection();});
+const programWorkspace = initProgramWorkspace($('#program-workspace'), { onSelectionChange(ids) {
+  selected.clear(); ids.forEach(id => selected.add(id)); updateSelection();
+} });
+$('#measure-grid').addEventListener('click',event=>{const b=event.target.closest('.measure-select');if(!b)return;programWorkspace.toggleMeasure(b.dataset.id);});
 $$('[data-filter]').forEach(button=>button.addEventListener('click',()=>{$$('[data-filter]').forEach(b=>{b.classList.toggle('active',b===button);b.setAttribute('aria-pressed',String(b===button));});$$('.measure-card').forEach(card=>{card.hidden=button.dataset.filter!=='Все'&&card.dataset.category!==button.dataset.filter;});}));
-$('#case-grid').addEventListener('click',event=>{const b=event.target.closest('[data-case]');if(!b)return;const c=cases.find(x=>x.id===b.dataset.case);selected.clear();c.measures.forEach(id=>selected.add(id));updateSelection();fillInputs({annualSpend:c.spend,savingsPercent:c.rate,implementationCost:c.investment,monthlyCost:c.monthly,rampMonths:c.ramp});$('#calculator').scrollIntoView({behavior:'smooth'});toast('Условный сценарий загружен. Замените допущения своими.');});
+$('#case-grid').addEventListener('click',event=>{const b=event.target.closest('[data-case]');if(!b)return;const c=cases.find(x=>x.id===b.dataset.case);fillInputs({annualSpend:c.spend,savingsPercent:c.rate,implementationCost:c.investment,monthlyCost:c.monthly,rampMonths:c.ramp});$('#calculator').scrollIntoView({behavior:'smooth'});toast('Учебный расчёт загружен. Сохранённая рабочая программа не изменена.');});
 $('#calc-form').addEventListener('submit',event=>event.preventDefault());
 $('#calc-form').addEventListener('input',event=>{if(event.target.id==='savingsPercent'){baseRate=Number(event.target.value);$$('[data-scenario]').forEach(b=>b.classList.toggle('active',b.dataset.scenario==='base'));}updateCalculation();});
 $('#reset-calc').addEventListener('click',()=>{fillInputs(defaults);toast('Параметры расчёта сброшены.');});
@@ -186,4 +210,4 @@ $('#clear-chat').addEventListener('click',()=>{requestVersion++;requestControlle
 
 industries.forEach(item=>{ const option=document.createElement('option');option.value=item.id;option.textContent=item.title;$('#industry-select').append(option); });
 $('#industry-select').addEventListener('change',()=>{const item=industries.find(i=>i.id===$('#industry-select').value);$('#apply-industry').hidden=!item;if(!item){$('#industry-note').textContent='Подберите направления для своей отрасли и проверьте их на ваших данных.';return;}const title=document.createElement('strong');title.textContent=item.focus;const p=document.createElement('p');p.textContent=item.guard+' Контроль: '+item.metric;$('#industry-note').replaceChildren(title,p);});
-$('#apply-industry').addEventListener('click',()=>{const item=industries.find(i=>i.id===$('#industry-select').value);if(!item)return;selected.clear();item.measures.forEach(id=>selected.add(id));updateSelection();toast('Типовые меры выбраны. Это гипотезы для проверки, не готовый диагноз.');});
+$('#apply-industry').addEventListener('click',()=>{const item=industries.find(i=>i.id===$('#industry-select').value);if(!item)return;item.measures.forEach(id=>programWorkspace.addMeasure(id));toast('Типовые меры добавлены без изменения существующих данных. Заполните независимые параметры каждой меры.');});
