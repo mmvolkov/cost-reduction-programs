@@ -1,3 +1,5 @@
+import { documentText } from './document-text.js';
+import { diagnosticOptions, priorityOptions, compareProgramScenarios, diagnoseProgram } from './program-p2-model.js';
 import { validateProgram, calculateProgram, calculateActual } from './program-model.js';
 import { measures as library } from './data.js';
 import { fields } from './calculation-report.js';
@@ -11,6 +13,47 @@ const financial = value => value === null ? 'Нет данных' : `${money(val
 function monthName(start, offset) {
   const [year,month]=start.split('-').map(Number), d=new Date(Date.UTC(year,month-1+offset,1));
   return new Intl.DateTimeFormat('ru-RU',{month:'long',year:'numeric',timeZone:'UTC'}).format(d);
+}
+function appendP2Report(program,add) {
+  const answerLabels=(key,values)=>values.length?values.map(id=>diagnosticOptions[key].find(option=>option.id===id).label).join('; '):'Не задано';
+  add('heading','Локальная диагностика');
+  add('paragraph',`Отрасль: ${program.diagnostic.industry?answerLabels('industries',[program.diagnostic.industry]):'Не задано'}. Структура расходов: ${answerLabels('spendAreas',program.diagnostic.spendAreas)}.`);
+  add('paragraph',`Ограничения: ${answerLabels('constraints',program.diagnostic.constraints)}. Доступные данные: ${answerLabels('availableData',program.diagnostic.availableData)}.`);
+  add('paragraph','Диагностика использует объяснимые правила, не AI. Она предлагает направления для проверки, а не выдуманные денежные допущения или подтвержденную экономию.');
+  const diagnosis=diagnoseProgram(program.diagnostic);
+  for(const recommendation of diagnosis.recommendations){
+    add('subheading',recommendation.title);
+    add('paragraph',`Причины: ${recommendation.reasons.map(s=>s.replace(/[.!;]+$/, '')).join('; ')}. Данные для проверки: ${recommendation.missingData.length?recommendation.missingData.map(s=>s.replace(/[.!;]+$/, '')).join('; '):'сведения по выбранным признакам доступны, но требуют проверки'}.`);
+    add('paragraph',`Ограничения качества: ${recommendation.qualityConstraints.map(s=>s.replace(/[.!;]+$/, '')).join('; ')}.`);
+  }
+  add('heading','Импортированные расходы');
+  const records=program.expenses.records;
+  if(!records.length)add('paragraph','Реестр расходов не импортирован.');
+  else {
+    add('paragraph',`Принято строк: ${records.length}. Суммы реестра указаны в рублях, включая явно принятые возвраты. Это расходы, а не факт экономии. Полный редактируемый реестр сохраняется в JSON программы.`);
+    const periods=[...new Set(records.map(r=>r.period))].sort();
+    for(const period of periods){const subset=records.filter(r=>r.period===period);add('paragraph',`${period}: ${money(subset.reduce((sum,r)=>sum+r.amountRub,0))} ₽, строк: ${subset.length}.`);}
+    add('paragraph','Месяц с записями не обязательно содержит все расходы месяца. Для переноса базы требуется явный выбор поднабора, месяцев и годового пересчета. Границы примененной базы приведены в карточке соответствующей меры. Импорт не создает факты экономии.');
+  }
+  add('heading','Сравнение сценариев');
+  add('paragraph',`Общий старт: ${program.startMonth}; плановый горизонт каждого варианта - 12 месяцев. Окупаемость ищется в пределах 120 месяцев. Альтернативы не содержат фактов или подтверждений экономии; исходная программа не изменяется.`);
+  if(program.scenarios.length<2)add('paragraph','Сравнение неполное: для сопоставления базового варианта нужны минимум две независимые альтернативы.');
+  const comparison=compareProgramScenarios(program);
+  for(const scenario of comparison.rows){
+    const result=scenario;
+    add('subheading',specified(scenario.name));
+    add('paragraph',result.reliable?'Параметры полны, проверка пересечений для этого расчета не требуется либо выполнена. Это сценарий, не гарантия.':`Достоверный общий итог заблокирован: ${result.reasons.join('; ')}.`);
+    add('paragraph',`${result.reliable?'План':'Предварительная сумма заполненной части'} за 12 месяцев: ${financial(result.firstYearNet)}. Устойчивый годовой эффект: ${financial(result.annualNet)}. Окупаемость: ${!result.reliable?'не показывается до заполнения и проверки пересечений':result.paybackMonths===null?'не достигнута за 120 месяцев':`${money(result.paybackMonths)} мес`}.`);
+    for(const difference of scenario.compositionDifferences) add('paragraph',`Отличие состава от базы: ${difference.title} - ${difference.change==='removed'?'отсутствует в альтернативе':'добавлена в альтернативу'}.`);
+    for(const m of scenario.measures){
+      const original=program.measures.find(x=>x.id===m.id),title=library.find(x=>x.id===m.id).title;
+      const labels={annualSpend:'база млн ₽/год',savingsPercent:'снижение %',implementationCost:'внедрение млн ₽',monthlyCost:'поддержка млн ₽/мес.',rampMonths:'разгон мес.',startMonth:'месяц запуска'};
+      const values=Object.entries(labels).map(([key,label])=>`${label}: ${numeric(m.inputs[key])}${scenario.id!=='base'&&original&&m.inputs[key]!==original.inputs[key]?` (в базе ${numeric(original.inputs[key])})`:''}`);
+      const sourceMeasure=scenario.isBase?original:program.scenarios.find(s=>s.id===scenario.id)?.measures.find(item=>item.id===m.id);
+      add('paragraph',`${title}: ${m.included?'включена':'исключена'}${!scenario.isBase&&original&&m.included!==original.included?` (в базе ${original.included?'включена':'исключена'})`:''}. ${values.join('; ')}. Границы базы: ${specified(sourceMeasure?.costScope)}.`);
+    }
+    if(!scenario.measures.length)add('paragraph','Меры не выбраны; это не нулевой подтвержденный эффект.');
+  }
 }
 // Shared by the browser summary and every report format: never present an
 // unverified cross-measure sum as a confirmed financial result.
@@ -30,7 +73,7 @@ export function actualSummaryPresentation(calculation) {
 }
 export function createProgramReport(source) {
   const program=validateProgram(source), calculation=calculateProgram(program), blocks=[];
-  const add=(type,text)=>blocks.push({type,text:String(text)});
+  const add=(type,text)=>blocks.push({type,text:documentText(text)});
   add('title',specified(program.name));
   add('subtitle','Рабочая программа снижения затрат. Расчёты по формулам, без AI. Подтверждение факта — оценка пользователя, не независимый аудит.');
   add('paragraph',`Начало программы: ${program.startMonth}. Денежные суммы в млн ₽.`);
@@ -59,11 +102,15 @@ export function createProgramReport(source) {
     const entry=library.find(x=>x.id===m.id), result=calculation.measures.find(x=>x.id===m.id);
     add('subheading',`${entry.title} — ${m.included?'включена в суммы':'исключена из сумм'}`);
     add('paragraph',`Область расходов / границы базы: ${specified(m.costScope)}`);
+    const priority=m.priority;
+    const label=(key)=>priorityOptions[key].find(([id])=>id===priority[key])[1];
+    add('paragraph',`Сложность: ${label('complexity')}. Риск: ${label('risk')}. Основание: ${label('evidenceType')}.`);
+    add('paragraph',`Источник оценки / пояснение: ${specified(priority.sourceComment)}. Это введенная пользователем оценка, не независимое подтверждение и не процент уверенности.`);
     add('paragraph',`Начало: месяц ${m.inputs.startMonth} (${monthName(program.startMonth,m.inputs.startMonth-1)}). Параметры: ${result.complete?'заполнены':'неполные; результат этой меры не включён в план'}.`);
     for(const [key,spec] of Object.entries(fields)) add('paragraph',`${spec.label}: ${numeric(m.inputs[key])}`);
     if(result.complete) {
       add('paragraph',`Индивидуальный первый год меры (12 месяцев от её запуска): ${financial(result.calculation.firstYearNet)}. Вклад в первые 12 месяцев программы: ${financial(result.series[11].accumulated)}.`);
-      add('paragraph',`Годовой эффект меры на полном режиме: ${financial(result.calculation.annualNet)}. Индивидуальная окупаемость от запуска меры: ${result.calculation.paybackMonths === null ? 'не достигнута за 120 месяцев' : `${money(result.calculation.paybackMonths)} мес.`}. Индивидуальные сроки не усредняются для общей окупаемости.`);
+      add('paragraph',`Годовой эффект меры на полном режиме: ${financial(result.calculation.annualNet)}. Индивидуальная окупаемость от запуска меры: ${result.calculation.paybackMonths === null ? 'не достигнута за 120 месяцев' : `${money(result.calculation.paybackMonths)} мес`}. Индивидуальные сроки не усредняются для общей окупаемости.`);
     } else add('paragraph','Индивидуальные итоги не рассчитаны: заполните все параметры меры.');
     add('paragraph',`Ответственный: ${specified(m.execution.owner)}. Срок: ${specified(m.execution.dueDate)}.`);
     add('paragraph',`Статус: ${statuses[m.execution.status]}. Следующий шаг: ${specified(m.execution.nextStep)}`);
@@ -100,11 +147,12 @@ export function createProgramReport(source) {
       add('paragraph',`${title}${m.included?'':' (исключена из сумм)'}. Ответственный: ${specified(m.execution.owner)}. Срок: ${specified(m.execution.dueDate)}. Статус: ${statuses[m.execution.status]}. Следующий шаг: ${specified(m.execution.nextStep)}`);
     }
   }
+  appendP2Report(program,add);
   add('heading','Методика и ограничения');
   add('paragraph','Каждая мера рассчитывается отдельно существующим калькулятором. Внедрение оплачивается в начале месяца запуска; поддержка начисляется с этого же месяца. До запуска потоки равны нулю. Линейный разгон использует среднюю точку месяца. Общая окупаемость определяется по суммарным потокам, а не средним сроком мер, в пределах 120 месяцев; учитываются поздние затраты запуска. Налоги, сезонность, изменение выручки и стоимость капитала не моделируются.');
   add('paragraph','Факт = сопоставимая база − фактические расходы − фактическое внедрение − фактическая поддержка. В поле расходов не включают внедрение и поддержку повторно. Отрицательный результат сохраняется. План сравнивается только с заполненными фактами для тех же мер и месяцев. Неполнота и нерешённые пересечения не дают достоверного общего итога.');
   add('paragraph','Программа хранится только в текущем браузере и origin. Файл сформирован локально, без передачи программы AI-провайдеру. JSON предназначен для резервного копирования; при импорте создаётся новая программа и подтверждения требуют повторной проверки.');
-  return {version:1,program,calculation,blocks};
+  return {version:2,program,calculation,blocks};
 }
 export async function exportProgramReport(program,format) {
   if(!Object.hasOwn(exportFormats,format)) throw new TypeError('Неизвестный формат экспорта.');

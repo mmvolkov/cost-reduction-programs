@@ -32,6 +32,22 @@ test('DOCX is a real OOXML ZIP with editable Russian text and no external relati
  for(const p of ['[Content_Types].xml','_rels/.rels','word/document.xml','word/styles.xml','word/_rels/document.xml.rels'])assert.ok(parts[p],p);
  assert.match(parts['word/document.xml'],/0,76 млн ₽/);assert.match(parts['word/document.xml'],/Закупки без переплаты/);assert.match(parts['word/document.xml'],/w:pgSz w:w="11906" w:h="16838"/);assert.match(parts['word/styles.xml'],/w:lang w:val="ru-RU"/);
  for(const text of Object.values(parts))assert.doesNotMatch(text,/TargetMode="External"|vbaProject|altChunk/);
+ assert.match(parts['word/document.xml'],/w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/);
+ assert.match(parts['word/styles.xml'],/w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"\/><w:sz w:val="22"/);
+ assert.doesNotMatch(parts['word/document.xml'],/[ёЁ\u2010-\u2015\u2212]/);
+});
+test('document defaults normalize presentation only and retain negative amounts and source data',async()=>{
+ const {documentText}=await import('../public/document-text.js');
+ const {buildDocx}=await import('../public/report-export-docx.js');
+ const text='Ёлка, счёт: −0,25 ₽; 1–30; А—Б; non‑breaking.';
+ const source={blocks:[{type:'paragraph',text}]};
+ const parts=storedZipEntries(buildDocx(source));
+ assert.equal(source.blocks[0].text,text);
+ assert.equal(documentText(text),'Елка, счет: -0,25 ₽; 1-30; А-Б; non-breaking.');
+ assert.match(parts['word/document.xml'],/Елка, счет: -0,25 ₽; 1-30; А-Б; non-breaking\./);
+ const canonical=createReport(input,['procurement']);
+ assert.ok(canonical.blocks.every(b=>!/[ёЁ\u2010-\u2015\u2212]/.test(b.text)));
+ assert.equal(canonical.inputs.implementationCost,.2);
 });
 test('PDF is a true document with embedded Unicode fonts and no active actions',async()=>{
  const f=await exportReport(createReport(input,['procurement']),'pdf'),bytes=await getBytes(f),raw=new TextDecoder('latin1').decode(bytes);assert.equal(f.blob.type,'application/pdf');assert.match(raw,/^%PDF-/);assert.match(raw,/\/ToUnicode/);assert.match(raw,/\/FontFile2/);assert.ok(!/\/JavaScript|\/Launch|\/SubmitForm|\/GoToR|\/URI\b/.test(raw),'PDF must not contain active or external actions');assert.ok(bytes.length>10000);

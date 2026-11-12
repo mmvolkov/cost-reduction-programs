@@ -10,10 +10,10 @@ const locks=lockManager();
 const createProgramStore=storage=>realCreateProgramStore(storage,{locks});
 const memory = () => { const values = new Map(); return { getItem: k => values.get(k) ?? null, setItem: (k,v) => values.set(k,v), values }; };
 function sample() { const p=createProgram({name:'Программа № 1'});p.measures.push(createProgramMeasure('procurement'));p.measures[0].execution.owner='Иван Петров';p.measures[0].execution.nextStep='Сверить цены';return p; }
-const stateFor=p=>({schemaVersion:1,activeId:p.id,programs:[p]});
+const stateFor=p=>({schemaVersion:2,activeId:p.id,programs:[p]});
 test('program store saves reloads and switches multiple programs without storing chat or credentials',async()=>{
  const storage=memory(),store=createProgramStore(storage);assert.equal(store.load().status.code,'empty');
- const p=sample(),q=createProgram({name:'Вторая'}),state={schemaVersion:1,activeId:q.id,programs:[p,q]};
+ const p=sample(),q=createProgram({name:'Вторая'}),state={schemaVersion:2,activeId:q.id,programs:[p,q]};
  assert.equal((await store.save(state)).ok,true);const restored=createProgramStore(storage).load();assert.equal(restored.ok,true);assert.deepEqual(restored.state,state);
  for(const key of ['apiKey','accessCode','chat','messages'])assert.equal((await store.save({...state,[key]:'secret'})).status.code,'invalid');
  assert.doesNotMatch(storage.getItem(PROGRAM_STORAGE_KEY),/secret|accessCode/);
@@ -42,10 +42,10 @@ test('JSON import is a new program; current object is intact, facts retained and
 });
 test('strict import rejects oversized, unknown version, extra fields, duplicate IDs and prototype pollution',async()=>{
  const p=sample(),raw=exportProgramJson(p);assert.throws(()=>importProgramJson(' '.repeat(MAX_PROGRAM_JSON_BYTES+1)));
- assert.throws(()=>importProgramJson(JSON.stringify({schemaVersion:2,program:p})));assert.throws(()=>importProgramJson(JSON.stringify({schemaVersion:1,program:p,accessCode:'secret'})));
+ assert.throws(()=>importProgramJson(JSON.stringify({schemaVersion:99,program:p})));assert.throws(()=>importProgramJson(JSON.stringify({schemaVersion:2,program:p,accessCode:'secret'})));
  assert.throws(()=>importProgramJson(raw.replace('"program": {','"program": {"__proto__":{"x":1},')));
- assert.throws(()=>validateProgramState({schemaVersion:1,activeId:p.id,programs:[p,p]}));assert.throws(()=>validateProgramState({schemaVersion:1,activeId:'missing',programs:[p]}));
- assert.throws(()=>validateProgramState({schemaVersion:1,activeId:p.id,programs:Array.from({length:21},()=>sample())}));
+ assert.throws(()=>validateProgramState({schemaVersion:2,activeId:p.id,programs:[p,p]}));assert.throws(()=>validateProgramState({schemaVersion:2,activeId:'missing',programs:[p]}));
+ assert.throws(()=>validateProgramState({schemaVersion:2,activeId:p.id,programs:Array.from({length:21},()=>sample())}));
  const hostile=sample();hostile.name='<img src=x onerror=alert(1)>';const imported=importProgramJson(exportProgramJson(hostile));assert.match(imported.name,/<img/); // Plain text data, never HTML execution.
 });
 

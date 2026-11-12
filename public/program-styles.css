@@ -73,3 +73,30 @@
 .pm-action-plan h4 { font-size:16px; margin:20px 0 8px; }
 .pm-action-plan ul { padding-left:24px; }
 .pm-action-plan li { margin:8px 0; }
+/* P2 uses the same readable controls and scoped horizontal table scrolling. */
+.pm-p2 { min-width:0; }
+.pm-p2-panel>summary { font-size:20px; font-weight:700; min-height:48px; padding:8px 0; cursor:pointer; line-height:1.4; }
+.pm-p2-panel>summary::marker { color:#009a4d; }
+.pm-p2-panel>p,.pm-p2-panel>.pm-grid,.pm-p2-panel>.pm-field { margin-top:16px; }
+.pm-p2-panel>h4,.pm-p2-card h4 { font-size:18px; margin:20px 0 12px; }
+.pm-p2-panel>button { margin:16px 8px 0 0; }
+.pm-step-nav { display:flex; flex-wrap:wrap; gap:8px; margin:24px 0; }
+.pm-step-nav button { flex:1 1 180px; }
+.pm-step-nav [aria-current=step] { border-color:#009a4d; background:#f0fdf4; color:#166534; }
+.pm-p2-fieldset { border:1px solid #e2e8f0; border-radius:12px; padding:16px; margin:20px 0; min-width:0; }
+.pm-p2-fieldset>legend { font-weight:700; padding:0 8px; max-width:100%; }
+.pm-p2-fieldset>.pm-field { margin-top:16px; }
+.pm-choice-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px; }
+.pm-p2-card { padding:20px; border:1px solid #e2e8f0; border-radius:16px; margin-top:16px; min-width:0; }
+.pm-p2-card>summary,.pm-p2-group>summary { min-height:44px; cursor:pointer; padding:10px 0; font-weight:700; line-height:1.5; }
+.pm-p2-card>.pm-grid,.pm-p2-card>.pm-field { margin-top:16px; }
+.pm-p2-card>p { margin-top:12px; }
+.pm-p2 .pm-table-scroll td { min-width:110px; max-width:360px; white-space:normal; overflow-wrap:anywhere; text-align:left; vertical-align:top; }
+.pm-p2 .pm-table-scroll th { white-space:normal; text-align:left; vertical-align:top; }
+.pm-p2 .pm-table-scroll .pm-field { min-width:230px; font-weight:400; }
+.pm-p2 .pm-table-scroll select { max-width:100%; }
+.pm-p2 input[type=file] { max-width:100%; white-space:normal; }
+.pm-p2-group { margin-top:12px; }
+.pm-p2 button:disabled { opacity:.6; cursor:wait; }
+@media(max-width:760px) { .pm-p2-panel>summary { font-size:18px; } .pm-p2-card { padding:16px; } .pm-step-nav { display:grid; grid-template-columns:1fr 1fr; } .pm-step-nav button { padding:10px; } }
+@media(max-width:420px) { .pm-p2-panel { padding:14px; } .pm-p2-fieldset { padding:12px; } .pm-p2-panel>button { width:100%; margin-right:0; } .pm-step-nav { grid-template-columns:1fr; } }
