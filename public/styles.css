@@ -109,8 +109,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .principles > div { display: flex; align-items: center; gap: var(--space-2); }
 .principles > div + div { border-left: 1px solid var(--line); padding-left: var(--space-4); }
 .principles > div > span, .assistant-feature > span { display: grid; place-items: center; flex-shrink: 0; width: 32px; height: 32px; border: 1px solid #c8e6d6; border-radius: 50%; color: var(--green-dark); font-size: var(--text-small); }
-.principles p { font-size: var(--text-note); color: var(--muted); }
-.principles strong { color: var(--ink); font-weight: 600; }
+.principles > div > span { width: 36px; height: 36px; font-size: .875rem; font-weight: 600; }
+.principles p { font-size: 1rem; line-height: 1.6; color: var(--muted); }
+.principles strong { color: var(--ink); font-weight: 700; }
 .section { padding-block: var(--space-7); }
 .section-heading { display: grid; grid-template-columns: 1.1fr 1fr; align-items: end; gap: var(--space-6); margin-bottom: var(--space-5); }
 .section-heading > p { max-width: 52ch; font-size: var(--text-section); line-height: 1.6; color: var(--muted); }

@@ -57,3 +57,17 @@ test('controls and cards retain reflow-friendly dimensions', () => {
   assert.match(rule('.result-number'), /overflow-wrap: anywhere/);
   assert.match(rule('dialog'), /max-height: calc\(100dvh - 32px\)/);
 });
+
+
+test('principles emphasize the message without enlarging other note or number roles', () => {
+  assert.match(rule('.principles p'), /font-size: 1rem; line-height: 1\.6/);
+  assert.match(rule('.principles strong'), /font-weight: 700/);
+  const number = rule('.principles > div > span');
+  assert.match(number, /width: 36px; height: 36px/);
+  assert.match(number, /font-size: \.875rem; font-weight: 600/);
+  const shared = rule('.principles > div > span, .assistant-feature > span');
+  assert.match(shared, /width: 32px; height: 32px/);
+  assert.match(shared, /font-size: var\(--text-small\)/);
+  assert.match(css, /--text-note: \.875rem;/);
+  assert.match(css, /--text-small: \.75rem;/);
+});
