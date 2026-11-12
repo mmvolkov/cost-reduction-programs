@@ -92,7 +92,8 @@
 .pm-p2-card>.pm-grid,.pm-p2-card>.pm-field { margin-top:16px; }
 .pm-p2-card>p { margin-top:12px; }
 .pm-p2 .pm-table-scroll td { min-width:110px; max-width:360px; white-space:normal; overflow-wrap:anywhere; text-align:left; vertical-align:top; }
-.pm-p2 .pm-table-scroll th { white-space:normal; text-align:left; vertical-align:top; }
+.pm-p2 .pm-table-scroll th { min-width:110px; white-space:normal; word-break:normal; overflow-wrap:break-word; text-align:left; vertical-align:top; }
+.pm-p2 .pm-table-scroll th:first-child { min-width:140px; }
 .pm-p2 .pm-table-scroll .pm-field { min-width:230px; font-weight:400; }
 .pm-p2 .pm-table-scroll select { max-width:100%; }
 .pm-p2 input[type=file] { max-width:100%; white-space:normal; }

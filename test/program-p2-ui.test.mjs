@@ -48,7 +48,7 @@ test('P2 controls and tables remain scoped and keyboard accessible',()=>{
  assert.match(css,/\.program-workspace :is\(input,select,textarea\) \{ font-size:16px/);
 });
 
-import {expenseBaseForSelection} from '../public/program-p2-ui.js';
+import {expenseBaseForSelection,formatPaybackMonths} from '../public/program-p2-ui.js';
 test('period filtering cannot silently shrink numerator while keeping unrelated denominator months',()=>{
  const records=[{period:'2026-01',article:'A',amountRub:100},{period:'2026-02',article:'A',amountRub:200}];
  assert.throws(()=>expenseBaseForSelection(records,{months:['2026-01']},['2026-01','2026-02'],'average-month'),/фильтром/);
@@ -69,4 +69,21 @@ test('changing import settings invalidates both visible preview and pending pars
 test('a mutation cannot leave the current program too large for its recovery JSON export',()=>{
  assert.match(p1,/const valid=validateProgram\(next\);exportProgramJson\(valid\);state\.programs=/);
  assert.match(p1,/function addProgram\(program\)\{try\{exportProgramJson\(program\);\}/);
+});
+
+ test('payback presentation is concise without rounding a positive tiny period to zero',()=>{
+ assert.equal(formatPaybackMonths(6.666666667),'6,67 мес.');
+ assert.equal(formatPaybackMonths(2.5),'2,5 мес.');
+ assert.equal(formatPaybackMonths(0.001),'< 0,01 мес.');
+ assert.equal(formatPaybackMonths(0.01),'0,01 мес.');
+ assert.equal(formatPaybackMonths(0),'0 мес.');
+ for(const unknown of [null,undefined,NaN,Infinity,-1])assert.equal(formatPaybackMonths(unknown),'Нет данных');
+ assert.match(ui,/formatPaybackMonths\(r\.paybackMonths\)/);
+ assert.match(ui,/formatPaybackMonths\(r\.payback\)/);
+ });
+
+test('P2 table row headings retain readable widths inside scoped horizontal scroll',()=>{
+ assert.match(css,/\.pm-p2 \.pm-table-scroll th \{[^}]*min-width:110px;[^}]*word-break:normal;[^}]*overflow-wrap:break-word;/);
+ assert.match(css,/\.pm-p2 \.pm-table-scroll th:first-child \{ min-width:140px;/);
+ assert.match(css,/\.pm-table-scroll \{ overflow-x:auto;[^}]*max-width:100%;/);
 });
