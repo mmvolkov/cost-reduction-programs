@@ -23,8 +23,8 @@ test('program UI is browser-only and renders user values without HTML injection'
   assert.match(app,/temperature:0/);
   assert.doesNotMatch(app,/currentContext\.program|currentContext\.facts|JSON\.stringify\(program/);
 });
-test('branch checks do not add a P1 Pages deployment or change production resources', async () => {
+test('branch checks cover P1/P2 without deploying review branches', async () => {
   const ci=await read('.github/workflows/ci.yml'), pages=await read('.github/workflows/pages.yml');
-  assert.match(ci,/branches: \[main, codex\/program-management-p1\]/);
-  assert.match(pages,/branches: \[main\]/); assert.doesNotMatch(pages,/program-management-p1/);
+  assert.match(ci,/branches: \[main, codex\/program-management-p1, codex\/program-management-p2\]/);
+  assert.match(pages,/branches: \[main\]/); assert.doesNotMatch(pages,/program-management-p[12]/);
 });

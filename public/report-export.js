@@ -1,3 +1,4 @@
+import { documentText } from './document-text.js';
 import { calculateSavings } from './calculator.js';
 import { inspectCalculation, fields } from './calculation-report.js';
 import { measures } from './data.js';
@@ -16,7 +17,7 @@ export function createReport(input, measureIds = []) {
   const selected = measures.filter(m => ids.includes(m.id));
   const r = calculateSavings(inputs);
   const blocks = [];
-  const add = (type, text) => blocks.push(Object.freeze({type, text}));
+  const add = (type, text) => blocks.push(Object.freeze({type, text:documentText(text)}));
   add('title', 'Программа снижения затрат'); add('subtitle', DISCLAIMER);
   add('heading', 'Исходные данные');
   for (const [key, spec] of Object.entries(fields)) add('paragraph', `${spec.label}: ${money(inputs[key])}`);
@@ -54,7 +55,7 @@ export function reportHtml(report) {
     const tag = {title:'h1',heading:'h2',subheading:'h3',subtitle:'p',paragraph:'p'}[b.type] || 'p';
     return `<${tag}${b.type === 'subtitle' ? ' class="notice"' : ''}>${escape(b.text)}</${tag}>`;
   }).join('\n');
-  return `<!doctype html>\n<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>Программа снижения затрат</title><style>body{max-width:800px;margin:40px auto;padding:0 24px;font-family:system-ui,sans-serif;color:#111827;line-height:1.6;font-size:16px;overflow-wrap:anywhere}h1{font-size:30px;line-height:1.2}h2{margin-top:32px;color:#008241;font-size:22px;break-after:avoid}h3{margin-top:24px;font-size:18px;break-after:avoid}p{margin:10px 0}.notice{color:#475569;font-size:14px}@page{size:A4;margin:20mm}@media print{body{max-width:none;margin:0;padding:0;font-size:11pt}h1{font-size:22pt}h2{font-size:15pt}h3{font-size:12pt}.notice{font-size:10pt}p{orphans:3;widows:3}}</style></head><body>\n${body}\n</body></html>`;
+  return `<!doctype html>\n<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>Программа снижения затрат</title><style>body{max-width:800px;margin:40px auto;padding:0 24px;font-family:system-ui,sans-serif;color:#111827;line-height:1.6;font-size:16px;overflow-wrap:anywhere}h1{font-size:30px;line-height:1.2}h2{margin-top:32px;color:#008241;font-size:22px;break-after:avoid}h3{margin-top:24px;font-size:18px;break-after:avoid}p{margin:10px 0}.notice{color:#475569;font-size:14px}@page{size:A4;margin:36pt}@media print{body{max-width:none;margin:0;padding:0;font-size:11pt}h1{font-size:22pt}h2{font-size:15pt}h3{font-size:12pt}.notice{font-size:10pt}p{orphans:3;widows:3}}</style></head><body>\n${body}\n</body></html>`;
 }
 
 export async function exportReport(report, format) {

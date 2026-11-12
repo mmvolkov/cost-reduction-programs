@@ -32,6 +32,22 @@ test('DOCX is a real OOXML ZIP with editable Russian text and no external relati
  for(const p of ['[Content_Types].xml','_rels/.rels','word/document.xml','word/styles.xml','word/_rels/document.xml.rels'])assert.ok(parts[p],p);
  assert.match(parts['word/document.xml'],/0,76 млн ₽/);assert.match(parts['word/document.xml'],/Закупки без переплаты/);assert.match(parts['word/document.xml'],/w:pgSz w:w="11906" w:h="16838"/);assert.match(parts['word/styles.xml'],/w:lang w:val="ru-RU"/);
  for(const text of Object.values(parts))assert.doesNotMatch(text,/TargetMode="External"|vbaProject|altChunk/);
+ assert.match(parts['word/document.xml'],/w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/);
+ assert.match(parts['word/styles.xml'],/w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"\/><w:sz w:val="22"/);
+ assert.doesNotMatch(parts['word/document.xml'],/[ёЁ\u2010-\u2015\u2212]/);
+});
+test('document defaults normalize presentation only and retain negative amounts and source data',async()=>{
+ const {documentText}=await import('../public/document-text.js');
+ const {buildDocx}=await import('../public/report-export-docx.js');
+ const text='Ёлка, счёт: −0,25 ₽; 1–30; А—Б; non‑breaking; мяг\u00ADкий; A\uFE58B\uFE63C\uFF0DD.';
+ const source={blocks:[{type:'paragraph',text}]};
+ const parts=storedZipEntries(buildDocx(source));
+ assert.equal(source.blocks[0].text,text);
+ assert.equal(documentText(text),'Елка, счет: -0,25 ₽; 1-30; А-Б; non-breaking; мягкий; A-B-C-D.');
+ assert.match(parts['word/document.xml'],/Елка, счет: -0,25 ₽; 1-30; А-Б; non-breaking; мягкий; A-B-C-D\./);
+ const canonical=createReport(input,['procurement']);
+ assert.ok(canonical.blocks.every(b=>!/[ёЁ\u2010-\u2015\u2212]/.test(b.text)));
+ assert.equal(canonical.inputs.implementationCost,.2);
 });
 test('PDF is a true document with embedded Unicode fonts and no active actions',async()=>{
  const f=await exportReport(createReport(input,['procurement']),'pdf'),bytes=await getBytes(f),raw=new TextDecoder('latin1').decode(bytes);assert.equal(f.blob.type,'application/pdf');assert.match(raw,/^%PDF-/);assert.match(raw,/\/ToUnicode/);assert.match(raw,/\/FontFile2/);assert.ok(!/\/JavaScript|\/Launch|\/SubmitForm|\/GoToR|\/URI\b/.test(raw),'PDF must not contain active or external actions');assert.ok(bytes.length>10000);
@@ -55,4 +71,30 @@ test('PDF heading keeps its trailing gap and following body lines together at a 
  assert.doesNotMatch(stream(contents[0]),/\s14 Tf/);
  assert.match(stream(contents[1]),/\s14 Tf/);
  assert.match(stream(contents[1]),/\s10\.5 Tf/);
+});
+
+test('program exports remove soft hyphens and normalize compatibility dashes without changing saved JSON',async()=>{
+ const {createProgram}=await import('../public/program-model.js');
+ const {createProgramReport,exportProgramReport}=await import('../public/program-report.js');
+ const p=createProgram({name:'Мяг\u00ADкий\uFE58переход\uFE63без\uFF0Dпотерь',startMonth:'2026-01'});
+ p.notes='Исходный\u00AD текст: −0,25 и А\uFE58Б\uFE63В\uFF0DГ';
+ const source=JSON.stringify(p),canonical=createProgramReport(p);
+ const forbidden=/[\u00AD\uFE58\uFE63\uFF0D]/;
+ assert.ok(canonical.blocks.every(b=>!forbidden.test(b.text)));
+ for(const format of ['txt','html','docx','pdf']){
+   const output=await exportProgramReport(p,format),bytes=await getBytes(output);
+   if(format==='pdf'){
+     const raw=Buffer.from(bytes).toString('latin1');assert.match(raw,/^%PDF-/);
+     // Check the embedded Unicode character maps, not compressed font bytes.
+     for(const match of raw.matchAll(/<<(.*?)>>\s*stream\r?\n([\s\S]*?)\r?\nendstream/gs)){
+       let stream=Buffer.from(match[2],'latin1');if(/\/FlateDecode/.test(match[1]))stream=inflateSync(stream);
+       const text=stream.toString('latin1');if(text.includes('beginbfchar'))assert.doesNotMatch(text,/>\s*<(?:00ad|fe58|fe63|ff0d)>/i);
+     }
+   }else{
+     const text=format==='docx'?storedZipEntries(bytes)['word/document.xml']:await output.blob.text();
+     assert.match(text,/Мягкий-переход-без-потерь/);assert.match(text,/А-Б-В-Г/);assert.doesNotMatch(text,forbidden);
+   }
+ }
+ assert.equal(JSON.stringify(p),source);
+ assert.match(p.name,/\u00AD/);assert.match(p.notes,/\uFE58/);
 });

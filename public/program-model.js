@@ -1,7 +1,8 @@
 import { calculateSavings } from './calculator.js';
 import { measures as library } from './data.js';
+import { createDiagnostic, createPriority, validateDiagnostic, validatePriority, validateExpenses, validateScenarios } from './program-p2-schema.js';
 
-export const PROGRAM_SCHEMA_VERSION = 1;
+export const PROGRAM_SCHEMA_VERSION = 2;
 export const executionStatuses = Object.freeze(['hypothesis', 'review', 'pilot', 'implementation', 'confirmation']);
 const limits = Object.freeze({annualSpend:1000000,savingsPercent:100,implementationCost:1000000,monthlyCost:100000,rampMonths:36});
 const keys = Object.keys(limits);
@@ -9,6 +10,7 @@ const factKeys = ['baseline','actualSpend','implementationCost','monthlyCost','s
 function record(value, allowed, label) {
   if (!value || typeof value !== 'object' || Array.isArray(value) || ![Object.prototype,null].includes(Object.getPrototypeOf(value))) throw new TypeError(`${label}: ожидается объект`);
   const own = Object.keys(value);
+  if(Object.values(Object.getOwnPropertyDescriptors(value)).some(d=>!Object.hasOwn(d,'value')))throw new TypeError('Accessor fields are not data');
   if (own.length !== allowed.length || own.some(k => !allowed.includes(k)) || allowed.some(k => !Object.hasOwn(value,k))) throw new TypeError(`${label}: неизвестные или отсутствующие поля`);
 }
 function text(value, max=4000) { if (typeof value !== 'string' || value.length > max || /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/u.test(value) || /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(value)) throw new TypeError('Недопустимый текст'); return value; }
@@ -50,28 +52,35 @@ export function updateFact(fact, patch) {
 export function confirmFact(fact) { return validateFact({...validateFact(fact),confirmed:true}); }
 export function createProgramMeasure(id) {
   const item = library.find(m=>m.id===id); if (!item) throw new TypeError('Неизвестная мера');
-  return {id,costScope:'',included:true,inputs:{annualSpend:null,savingsPercent:null,implementationCost:null,monthlyCost:null,rampMonths:null,startMonth:1},execution:{owner:'',dueDate:'',nextStep:'',status:'hypothesis',successCriterion:'',qualityMetric:'',notes:''},facts:Array.from({length:12},createFact)};
+  return {id,costScope:'',included:true,inputs:{annualSpend:null,savingsPercent:null,implementationCost:null,monthlyCost:null,rampMonths:null,startMonth:1},execution:{owner:'',dueDate:'',nextStep:'',status:'hypothesis',successCriterion:'',qualityMetric:'',notes:''},facts:Array.from({length:12},createFact),priority:createPriority()};
 }
 export function createProgram({id=globalThis.crypto.randomUUID(),name='Новая программа',startMonth=new Date().toISOString().slice(0,7)}={}) {
-  return validateProgram({id,name,startMonth,updatedAt:new Date().toISOString(),notes:'',measures:[],overlap:{confirmed:false,note:''}});
+  return validateProgram({id,name,startMonth,updatedAt:new Date().toISOString(),notes:'',measures:[],overlap:{confirmed:false,note:''},diagnostic:createDiagnostic(),expenses:{records:[]},scenarios:[]});
 }
-export function validateProgram(program) {
-  record(program,['id','name','startMonth','updatedAt','notes','measures','overlap'],'Программа');
+export function validateProgram(program) { return validateProgramShape(program,false); }
+export function migrateProgramV1(program) { return validateProgramShape(program,true); }
+function validateInputs(value) {
+  record(value,[...keys,'startMonth'],'Параметры');
+  const inputs=Object.fromEntries(keys.map(k=>[k,number(value[k],limits[k])]));
+  if(!Number.isInteger(value.startMonth)||value.startMonth<1||value.startMonth>12)throw new RangeError('Месяц запуска должен быть от 1 до 12');
+  inputs.startMonth=value.startMonth; return inputs;
+}
+function validateProgramShape(program,legacy) {
+  record(program,['id','name','startMonth','updatedAt','notes','measures','overlap',...(legacy?[]:['diagnostic','expenses','scenarios'])],'Программа');
   if (typeof program.id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/.test(program.id)) throw new TypeError('Недопустимый ID');
   if (!Array.isArray(program.measures) || program.measures.length > library.length) throw new TypeError('Слишком много мер');
   record(program.overlap,['confirmed','note'],'Пересечения'); const seen = new Set();
   const measures = program.measures.map(m=>{
-    record(m,['id','costScope','included','inputs','execution','facts'],'Мера');
+    record(m,['id','costScope','included','inputs','execution','facts',...(legacy?[]:['priority'])],'Мера');
     if (!library.some(x=>x.id===m.id) || seen.has(m.id)) throw new TypeError('Неизвестная или повторная мера'); seen.add(m.id);
-    record(m.inputs,[...keys,'startMonth'],'Параметры'); const inputs = Object.fromEntries(keys.map(k=>[k,number(m.inputs[k],limits[k])]));
-    if (!Number.isInteger(m.inputs.startMonth) || m.inputs.startMonth < 1 || m.inputs.startMonth > 12) throw new RangeError('Месяц запуска должен быть от 1 до 12'); inputs.startMonth=m.inputs.startMonth;
+    const inputs=validateInputs(m.inputs);
     record(m.execution,['owner','dueDate','nextStep','status','successCriterion','qualityMetric','notes'],'Исполнение');
     if(!executionStatuses.includes(m.execution.status)) throw new TypeError('Неизвестный статус');
     const execution={owner:text(m.execution.owner,160),dueDate:date(m.execution.dueDate),nextStep:text(m.execution.nextStep),status:m.execution.status,successCriterion:text(m.execution.successCriterion),qualityMetric:text(m.execution.qualityMetric),notes:text(m.execution.notes)};
     if(!Array.isArray(m.facts) || m.facts.length!==12) throw new TypeError('Нужно 12 месяцев факта');
-    return {id:m.id,costScope:text(m.costScope),included:bool(m.included),inputs,execution,facts:m.facts.map(validateFact)};
+    return {id:m.id,costScope:text(m.costScope),included:bool(m.included),inputs,execution,facts:m.facts.map(validateFact),priority:legacy?createPriority():validatePriority(m.priority)};
   });
-  return {id:program.id,name:text(program.name,160),startMonth:month(program.startMonth),updatedAt:timestamp(program.updatedAt),notes:text(program.notes),measures,overlap:{confirmed:bool(program.overlap.confirmed),note:text(program.overlap.note)}};
+  return {id:program.id,name:text(program.name,160),startMonth:month(program.startMonth),updatedAt:timestamp(program.updatedAt),notes:text(program.notes),measures,overlap:{confirmed:bool(program.overlap.confirmed),note:text(program.overlap.note)},diagnostic:legacy?createDiagnostic():validateDiagnostic(program.diagnostic),expenses:legacy?{records:[]}:validateExpenses(program.expenses),scenarios:legacy?[]:validateScenarios(program.scenarios,validateInputs)};
 }
 export function updateMeasureInputs(program,id,patch) {
   const next=validateProgram(program), measure=next.measures.find(m=>m.id===id); if(!measure) throw new TypeError('Мера не найдена');

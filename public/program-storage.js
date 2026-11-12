@@ -1,6 +1,6 @@
-import { createProgram, createProgramMeasure, validateProgram } from './program-model.js';
+import { createProgram, createProgramMeasure, validateProgram, migrateProgramV1 } from './program-model.js';
 
-export const PROGRAM_SCHEMA_VERSION = 1;
+export const PROGRAM_SCHEMA_VERSION = 2;
 export const PROGRAM_STORAGE_KEY = 'scout.cost-reduction.programs.v1';
 export const MAX_PROGRAM_JSON_BYTES = 2 * 1024 * 1024;
 export const MAX_PROGRAMS = 20;
@@ -21,9 +21,9 @@ function parse(text) {
 }
 export function validateProgramState(value) {
   own(value, ['schemaVersion', 'activeId', 'programs']);
-  if (value.schemaVersion !== PROGRAM_SCHEMA_VERSION) throw new TypeError('Версия схемы не поддерживается.');
+  if (![1,PROGRAM_SCHEMA_VERSION].includes(value.schemaVersion)) throw new TypeError('Версия схемы не поддерживается.');
   if (!Array.isArray(value.programs) || value.programs.length > MAX_PROGRAMS) throw new RangeError('Допустимо не более 20 программ.');
-  const programs = value.programs.map(program => validateProgram(program));
+  const programs = value.programs.map(program => value.schemaVersion===1 ? migrateProgramV1(program) : validateProgram(program));
   if (new Set(programs.map(p => p.id)).size !== programs.length) throw new TypeError('Идентификаторы программ повторяются.');
   if ((programs.length === 0 && value.activeId !== null) || (programs.length && !programs.some(p => p.id === value.activeId))) throw new TypeError('Активная программа не найдена.');
   return { schemaVersion: PROGRAM_SCHEMA_VERSION, activeId: value.activeId, programs };
@@ -95,8 +95,8 @@ export function exportProgramJson(program) {
 }
 export function importProgramJson(text) {
   const envelope = parse(text); own(envelope, ['schemaVersion', 'program']);
-  if (envelope.schemaVersion !== PROGRAM_SCHEMA_VERSION) throw new TypeError('Версия схемы не поддерживается.');
-  const program = validateProgram(envelope.program);
+  if (![1,PROGRAM_SCHEMA_VERSION].includes(envelope.schemaVersion)) throw new TypeError('Версия схемы не поддерживается.');
+  const program = envelope.schemaVersion===1 ? migrateProgramV1(envelope.program) : validateProgram(envelope.program);
   const fresh = createProgram();
   program.id = fresh.id;
   program.updatedAt = fresh.updatedAt;
@@ -111,6 +111,7 @@ export function cloneProgramScenario(source) {
   program.id = fresh.id;
   program.updatedAt = fresh.updatedAt;
   program.name = (program.name + ' (копия сценария)').slice(0, 160);
+  program.scenarios=[];
   program.overlap.confirmed = false;
   program.measures.forEach(measure => { measure.facts = createProgramMeasure(measure.id).facts; });
   return validateProgram(program);

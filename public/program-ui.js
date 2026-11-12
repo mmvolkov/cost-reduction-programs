@@ -1,3 +1,5 @@
+import { createProgramP2Controller } from './program-p2-ui.js';
+import { PROGRAM_SCHEMA_VERSION } from './program-storage.js';
 import { factEconomicsChanged } from './program-model.js';
 import { actualSummaryPresentation } from './program-report.js';
 import { measures } from './data.js';
@@ -18,12 +20,12 @@ const monthLabel = (start,index) => {const [year,month]=start.split('-').map(Num
 export function initProgramWorkspace(root,{onSelectionChange=()=>{}}={}) {
   const store=createProgramStore();
   const loaded=store.load();
-  let state=loaded.state || {schemaVersion:1,activeId:null,programs:[]};
+  let state=loaded.state || {schemaVersion:PROGRAM_SCHEMA_VERSION,activeId:null,programs:[]};
   let storageStatus=loaded.status || {code:'empty'};
   let factMeasureId=null, factMonth=0, reportBusy=false;
   let notice,saveStatus,summary,measureList,factArea,programSelect;
   let rawInvalid=false;
-  if(!state.programs.length){const p=createProgram();state={schemaVersion:1,activeId:p.id,programs:[p]};}
+  if(!state.programs.length){const p=createProgram();state={schemaVersion:PROGRAM_SCHEMA_VERSION,activeId:p.id,programs:[p]};}
   if(!state.programs.some(p=>p.id===state.activeId))state.activeId=state.programs[0].id;
   const active=()=>state.programs.find(p=>p.id===state.activeId);
   const announce=text=>{if(notice)notice.textContent=text;};
@@ -39,7 +41,7 @@ export function initProgramWorkspace(root,{onSelectionChange=()=>{}}={}) {
   function selection(){onSelectionChange(getSelectedIds());}
   function apply(mutator,{refresh=false,financial=false}={}) {
     const next=clone(active());
-    try{mutator(next);next.updatedAt=new Date().toISOString();if(financial)next.overlap.confirmed=false;const valid=validateProgram(next);state.programs=state.programs.map(p=>p.id===valid.id?valid:p);rawInvalid=!!root.querySelector(':invalid');save();selection();if(refresh)render();else updateSummary();return true;}
+    try{mutator(next);next.updatedAt=new Date().toISOString();if(financial)next.overlap.confirmed=false;const valid=validateProgram(next);exportProgramJson(valid);state.programs=state.programs.map(p=>p.id===valid.id?valid:p);rawInvalid=!!root.querySelector(':invalid');save();selection();if(refresh)render();else updateSummary();return true;}
     catch(error){announce(error.message || 'Проверьте введённые значения. Изменения не сохранены.');return false;}
   }
   function field(labelText,value,onChange,{type='text',maxLength=4000,min,max,step,id,help}={}) {
@@ -63,10 +65,11 @@ export function initProgramWorkspace(root,{onSelectionChange=()=>{}}={}) {
   function select(label,options,value,onChange,id){const wrapper=element('label',undefined,'pm-field');wrapper.append(element('span',label));const input=element('select');if(id)input.id=id;options.forEach(([v,t])=>{const o=element('option',t);o.value=v;input.append(o);});input.value=String(value);let previous=String(value);input.addEventListener('change',()=>{if(!canNavigate()){input.value=previous;return;}onChange(input.value);previous=input.value;});wrapper.append(input);return wrapper;}
   function canNavigate(){rawInvalid=!!root.querySelector(':invalid');if(rawInvalid){announce('Сначала исправьте некорректное поле: его значение ещё не сохранено.');root.querySelector(':invalid')?.focus();return false;}return true;}
   function activate(id){if(!canNavigate())return;state.activeId=id;factMeasureId=null;factMonth=0;save();render();selection();}
-  function addProgram(program){if(state.programs.length>=20){announce('Достигнут предел: 20 программ. Сохраните нужные программы в JSON.');return false;}state.programs.push(program);state.activeId=program.id;factMeasureId=null;factMonth=0;save();render();selection();return true;}
+  function addProgram(program){try{exportProgramJson(program);}catch(e){announce('Программа слишком велика для безопасного JSON-экспорта: '+e.message);return false;}if(state.programs.length>=20){announce('Достигнут предел: 20 программ. Сохраните нужные программы в JSON.');return false;}state.programs.push(program);state.activeId=program.id;factMeasureId=null;factMonth=0;save();render();selection();return true;}
   function addMeasure(id){if(!canNavigate())return false;if(!measures.some(m=>m.id===id))return false;const p=active(),existing=p.measures.find(m=>m.id===id);if(existing?.included)return true;return apply(next=>{const m=next.measures.find(m=>m.id===id);if(m)m.included=true;else next.measures.push(createProgramMeasure(id));},{refresh:true,financial:true});}
   function toggleMeasure(id){if(!canNavigate())return false;const found=active().measures.find(m=>m.id===id);if(!found)return addMeasure(id);return apply(next=>{next.measures.find(m=>m.id===id).included=!found.included;},{refresh:true,financial:true});}
   function getSelectedIds(){return active().measures.filter(m=>m.included).map(m=>m.id);}
+  const p2 = createProgramP2Controller({getProgram:()=>clone(active()),mutate:apply,canNavigate,announce,refreshP1:render});
   function render(){
     root.replaceChildren();root.classList.add('program-workspace');
     const heading=element('div',undefined,'section-heading');const headingText=element('div');headingText.append(element('div','Рабочее пространство','eyebrow'),element('h2','Управляйте программой, а не списком идей'));heading.append(headingText,element('p','Сохраните меры, назначьте ответственных и сравнивайте план с фактом. Быстрый калькулятор ниже остаётся отдельным учебным инструментом.'));root.append(heading);
@@ -86,6 +89,7 @@ export function initProgramWorkspace(root,{onSelectionChange=()=>{}}={}) {
     meta.append(field('Название программы',p.name,v=>{const ok=apply(n=>{n.name=v;});if(ok){const option=[...programSelect.options].find(o=>o.value===p.id);if(option)option.textContent=v||'Без названия';}return ok;},{maxLength:160,id:'pm-name'}));
     meta.append(field('Первый месяц программы',p.startMonth,v=>{const changed=active().startMonth!==v;const ok=apply(n=>{n.startMonth=v;if(changed)n.measures.forEach(m=>m.facts.forEach(f=>{f.confirmed=false;}));},{financial:true});if(ok&&changed)announce('Месяцы программы изменены. Подтверждения факта сброшены: проверьте соответствие записей новым датам.');return ok;},{type:'month',min:'1900-01',max:'9999-12',id:'pm-start-month'}));
     const notes=field('Заметки программы',p.notes,v=>apply(n=>{n.notes=v;}),{type:'textarea',id:'pm-notes'});notes.classList.add('pm-full');meta.append(notes);root.append(meta);
+    const p2Area=element('div');root.append(p2Area);p2.mount(p2Area);
     const add=element('div',undefined,'pm-toolbar');const available=measures.filter(m=>!p.measures.some(x=>x.id===m.id&&x.included));
     const addSelect=select('Добавить меру из библиотеки',[['','Выберите меру'],...available.map(m=>[m.id,m.title])],'',id=>{if(id)addMeasure(id);},'pm-add-measure');add.append(addSelect,element('p','Поля каждой меры заполняются самостоятельно. Общая база быстрого калькулятора не копируется.','pm-help'));root.append(add);
     measureList=element('div',undefined,'pm-measures');root.append(measureList);renderMeasures();
@@ -131,6 +135,7 @@ export function initProgramWorkspace(root,{onSelectionChange=()=>{}}={}) {
     const table=element('table');const thead=element('thead');const tr=element('tr');['Месяц','Экономия','Поддержка','Внедрение','Чистый поток','Накоплено'].forEach(t=>tr.append(element('th',t)));thead.append(tr);table.append(thead);const tbody=element('tbody');r.series.forEach(row=>{const tr=element('tr');tr.append(element('th',`${row.month}. ${monthLabel(p.startMonth,row.month-1)}`));['gross','support','implementation','net','accumulated'].forEach(k=>tr.append(element('td',money(row[k]))));tbody.append(tr);});table.append(tbody);const scroll=element('div',undefined,'pm-table-scroll');scroll.tabIndex=0;scroll.setAttribute('role','region');scroll.setAttribute('aria-label','План по месяцам, все суммы в миллионах рублей');scroll.append(table);summary.append(element('p','Все суммы в таблице — млн ₽.','pm-help'),scroll);
     const actual=r.actual;if(actual){const a=element('div',undefined,'pm-actual-summary');a.append(element('h4','План-факт: только заполненные записи'));const presentation=actualSummaryPresentation(r);a.append(element('p',presentation.coverage));a.append(element('p',presentation.completeness,presentation.partial?'pm-warning':'pm-help'));const prefix=actual.reliable?'':'Предварительно: нет данных или пересечения не разрешены. ';if(actual.filledCells>0)a.append(element('p',`${prefix}Факт: ${money(actual.net)} млн ₽. План за те же записи: ${actual.comparisonComplete?money(actual.matchedPlan):'неполный план'} млн ₽. Отклонение: ${money(actual.variance)} млн ₽.`));else a.append(element('p','Нет данных: факт и отклонение не рассчитаны. Годовой план показан отдельно выше.'));a.append(element('p',presentation.confirmation,r.overlapResolved?'pm-help':'pm-warning'));summary.append(a);}
     const roadmap=element('details',undefined,'pm-action-plan');roadmap.open=planOpen;roadmap.append(element('summary','План действий 30 / 60 / 90 дней из карточек'));const start=Date.parse(p.startMonth+'-01T00:00:00Z');const groups=[['1–30 дней',[]],['31–60 дней',[]],['61–90 дней',[]],['Позже 90 дней или до старта программы',[]],['Срок не задан',[]]];p.measures.filter(m=>m.included).forEach(m=>{const due=m.execution.dueDate;const day=due?Math.floor((Date.parse(due+'T00:00:00Z')-start)/86400000)+1:null;const index=day===null?4:day>=1&&day<=30?0:day<=60&&day>=31?1:day<=90&&day>=61?2:3;groups[index][1].push(m);});groups.forEach(([title,items])=>{roadmap.append(element('h4',title));if(!items.length)roadmap.append(element('p','Действия на этот период не заданы.','pm-help'));else{const list=element('ul');items.forEach(m=>{const source=measures.find(x=>x.id===m.id);list.append(element('li',`${source.title}: ${m.execution.nextStep.trim()||'следующий шаг не задан'}; ответственный: ${m.execution.owner.trim()||'не задан'}; срок: ${m.execution.dueDate||'не задан'}; статус: ${statuses[m.execution.status]}.`));});roadmap.append(list);}});summary.append(roadmap);
+    p2.refreshDerived();
     if(focusId){const restored=document.getElementById(focusId);restored?.focus({preventScroll:true});if(caret!==null&&caret!==undefined)restored?.setSelectionRange?.(caret,caret);}
   }
   function renderFacts(){
