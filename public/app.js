@@ -3,6 +3,7 @@ import { measures, cases, industries } from './data.js';
 import { calculateSavings } from './calculator.js';
 import { calculationReply, requestsCalculation } from './calculation-report.js';
 import { initProgramWorkspace } from './program-ui.js';
+import { createProgramAiTransport } from './program-ai-transport.js';
 
 const apiBase = deployment.apiBaseUrl || (deployment.mode === 'server' ? new URL('./api/', import.meta.url).href : null);
 const apiUrl = name => new URL(name, apiBase).href;
@@ -11,11 +12,14 @@ const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const fmt = (n, digits = 1) => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: digits }).format(n);
 // Only library IDs are shared with the existing opt-in AI context.
-// Saved program inputs, execution cards and facts never enter that context.
+// Saved programs never enter the free chat automatically. Contextual P3 drafts
+// use their own explicit preview and consent, without reusing this chat history.
 const selected = new Set();
 const defaults = { annualSpend:120, savingsPercent:8, implementationCost:2, monthlyCost:.1, rampMonths:4 };
 let currentCalculation, baseRate = 8, currentContext = {}, messages = [], config = { enabled:false, requiresAccessCode:true, providers:[] };
 let settings = { providerId:'softline', accessCode:'', temperature:0 };
+const contextualAi = createProgramAiTransport({apiBase,getConfig:()=>config,getSettings:()=>settings});
+let programWorkspace;
 let exporting = false;
 let pending = false, requestController = null, requestVersion = 0, toastTimer, pendingMessage = null;
 function cancelPending(message = 'Предыдущий запрос остановлен.') {
@@ -122,6 +126,7 @@ async function loadConfig() {
     $('#ai-status').textContent = !config.enabled ? 'AI пока не подключён. Материалы и калькулятор доступны. Владельцу сервера: проверьте ключ и устойчивый счётчик по инструкции.' : needsCode ? 'Для первого сообщения введите код доступа в настройках ⚙.' : `Публичный AI: до ${config.limits?.dailyRequests || 100} обращений к модели в сутки на всех посетителей, не более ${config.limits?.maxConcurrent || 2} одновременно. Ошибки также расходуют лимит. Сброс в 00:00 UTC.`;
   } catch { $('#ai-status').textContent = 'Не удалось проверить AI. Материалы и калькулятор работают. Перезагрузите страницу после запуска сервера.'; }
   updateModelLabel();
+  programWorkspace?.refreshAiAvailability();
 }
 async function sendMessage(event) {
   event.preventDefault(); if (pending) return;
@@ -185,7 +190,7 @@ async function downloadPlan() {
 }
 
 renderMeasures();renderCases();updateCalculation();loadConfig();
-const programWorkspace = initProgramWorkspace($('#program-workspace'), { onSelectionChange(ids) {
+programWorkspace = initProgramWorkspace($('#program-workspace'), { requestAi:contextualAi.requestAi, getAiAvailability:contextualAi.availability, onSelectionChange(ids) {
   selected.clear(); ids.forEach(id => selected.add(id)); updateSelection();
 } });
 $('#measure-grid').addEventListener('click',event=>{const b=event.target.closest('.measure-select');if(!b)return;programWorkspace.toggleMeasure(b.dataset.id);});
@@ -203,7 +208,7 @@ $$('[data-prompt]').forEach(button=>button.addEventListener('click',()=>{$('#cha
 $('#open-settings').addEventListener('click',()=>{ $('#provider-select').value=settings.providerId; $('#access-code').value=settings.accessCode; $('#temperature').value=String(settings.temperature); $('#settings-dialog').showModal(); });
 $('#close-settings').addEventListener('click',()=>$('#settings-dialog').close());
 $('#settings-dialog').addEventListener('click',event=>{if(event.target===$('#settings-dialog')){const r=event.target.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)event.target.close();}});
-$('#settings-form').addEventListener('submit',event=>{event.preventDefault();settings={providerId:$('#provider-select').value,accessCode:$('#access-code').value,temperature:Number($('#temperature').value)};updateModelLabel();$('#settings-dialog').close();if(config.enabled)$('#ai-status').textContent=(config.requiresAccessCode === false || settings.accessCode)?'Подключение выбрано. Проверьте согласие перед отправкой.':'Введите код доступа в настройках ⚙.';toast('Настройки сохранены в этой вкладке.');});
+$('#settings-form').addEventListener('submit',event=>{event.preventDefault();settings={providerId:$('#provider-select').value,accessCode:$('#access-code').value,temperature:Number($('#temperature').value)};programWorkspace.invalidateAi('Настройки модели изменены. Проверьте контекст и согласие заново.');programWorkspace.refreshAiAvailability();updateModelLabel();$('#settings-dialog').close();if(config.enabled)$('#ai-status').textContent=(config.requiresAccessCode === false || settings.accessCode)?'Подключение выбрано. Проверьте согласие перед отправкой.':'Введите код доступа в настройках ⚙.';toast('Настройки сохранены в этой вкладке.');});
 $('#chat-form').addEventListener('submit',sendMessage);
 $('#chat-input').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();$('#chat-form').requestSubmit();}});
 $('#clear-chat').addEventListener('click',()=>{requestVersion++;requestController?.abort();pending=false;$('#send-chat').disabled=false;messages=[];currentContext={};$('#chat-messages').replaceChildren();appendMessage('assistant','Начинаем новый диалог. Расскажите, что хотите улучшить в экономике бизнеса.');$('#chat-context span').textContent='Свободный диалог';$('#clear-context').hidden=true;$('#chat-input').value='';$('#ai-consent').checked=false;toast('Диалог и контекст очищены из этой вкладки.');});

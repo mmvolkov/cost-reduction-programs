@@ -1,0 +1,44 @@
+import { validateProgram } from './program-model.js';
+
+export const collaborationRoles=Object.freeze(['owner','editor','reviewer','viewer']);
+export const collaborationLimits=Object.freeze({participants:30,comments:200,history:300,decisions:100,text:2000});
+const provenances=['local-manual','received-unverified'];
+const outcomes=['approve','changes-requested','reject'];
+function own(v,keys){if(!v||typeof v!=='object'||Array.isArray(v)||![Object.prototype,null].includes(Object.getPrototypeOf(v))||Object.keys(v).length!==keys.length||keys.some(k=>!Object.hasOwn(v,k))||Object.values(Object.getOwnPropertyDescriptors(v)).some(d=>!Object.hasOwn(d,'value')))throw new TypeError('Неизвестные или отсутствующие поля совместной работы');}
+function text(v,max=2000){if(typeof v!=='string'||v.length>max||/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/u.test(v)||/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(v))throw new TypeError('Недопустимый текст совместной работы');return v;}
+function id(v){if(typeof v!=='string'||!/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/.test(v))throw new TypeError('Недопустимый ID совместной работы');return v;}
+function integer(v,min=0,max=1e9){if(!Number.isSafeInteger(v)||v<min||v>max)throw new TypeError('Недопустимая версия или счетчик');return v;}
+function at(v){if(typeof v!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(v)||!Number.isFinite(Date.parse(v))||new Date(v).toISOString()!==v)throw new TypeError('Недопустимое время записи');return v;}
+function provenance(v){if(!provenances.includes(v))throw new TypeError('Недопустимое происхождение записи');return v;}
+function role(v){if(!collaborationRoles.includes(v))throw new TypeError('Неизвестная организационная роль');return v;}
+function author(v){own(v,['id','name','role']);return {id:v.id===null?null:id(v.id),name:text(v.name,160),role:v.role===null?null:role(v.role)};}
+function list(v,max,map){if(!Array.isArray(v)||v.length>max)throw new TypeError('Превышен лимит локальных записей');const result=v.map(map);if(new Set(result.map(x=>x.id)).size!==result.length)throw new TypeError('Повторный ID записи');return result;}
+export function createCollaboration(){return {revision:1,participants:[],activeParticipantId:null,comments:[],history:[],decisions:[],historyDropped:0};}
+export function validateCollaboration(v,measureIds=[]){
+ own(v,['revision','participants','activeParticipantId','comments','history','decisions','historyDropped']);const revision=integer(v.revision,1);
+ const participants=list(v.participants,30,p=>{own(p,['id','name','role','provenance']);if(!text(p.name,160).trim())throw new TypeError('Имя участника не задано');return {id:id(p.id),name:p.name,role:role(p.role),provenance:provenance(p.provenance)};});
+ if(v.activeParticipantId!==null&&!participants.some(p=>p.id===v.activeParticipantId))throw new TypeError('Выбранный участник не найден');
+ const comments=list(v.comments,200,c=>{own(c,['id','scope','measureId','text','author','at','provenance']);if(!['program','measure'].includes(c.scope)||c.scope==='program'&&c.measureId!==null||c.scope==='measure'&&!measureIds.includes(c.measureId))throw new TypeError('Неизвестный предмет комментария');if(!text(c.text).trim())throw new TypeError('Комментарий пуст');return {id:id(c.id),scope:c.scope,measureId:c.measureId,text:c.text,author:author(c.author),at:at(c.at),provenance:provenance(c.provenance)};});
+ const history=list(v.history,300,h=>{own(h,['id','revision','action','summary','author','at','provenance']);return {id:id(h.id),revision:integer(h.revision,1,revision),action:text(h.action,160),summary:text(h.summary),author:author(h.author),at:at(h.at),provenance:provenance(h.provenance)};});
+ const decisions=list(v.decisions,100,d=>{own(d,['id','revision','decision','note','author','at','provenance']);if(!outcomes.includes(d.decision))throw new TypeError('Неизвестный вид решения');return {id:id(d.id),revision:integer(d.revision,1,revision),decision:d.decision,note:text(d.note),author:author(d.author),at:at(d.at),provenance:provenance(d.provenance)};});
+ return {revision,participants,activeParticipantId:v.activeParticipantId,comments,history,decisions,historyDropped:integer(v.historyDropped)};
+}
+const clone=p=>validateProgram(p);
+const actor=p=>{const a=p.collaboration.participants.find(x=>x.id===p.collaboration.activeParticipantId);return a?{id:a.id,name:a.name,role:a.role}:{id:null,name:'Автор не указан',role:null};};
+function recordHistory(p,action,summary){const c=p.collaboration;c.history.push({id:crypto.randomUUID(),revision:c.revision,action,summary,author:actor(p),at:new Date().toISOString(),provenance:'local-manual'});if(c.history.length>300){c.history.splice(0,c.history.length-300);c.historyDropped++;}}
+const business=p=>{const {updatedAt,collaboration,...rest}=p;return JSON.stringify(rest);};
+export function recordProgramChange(previous,next,{action='Изменение программы'}={}){
+ const before=clone(previous),after=clone(next);if(before.id!==after.id)throw new TypeError('Изменение другой программы запрещено');
+ if(business(before)===business(after))return after;
+ // Business edits cannot silently substitute the comment/decision ledger.
+ after.collaboration=structuredClone(before.collaboration);after.collaboration.revision=integer(before.collaboration.revision+1,1);
+ recordHistory(after,text(action,160),'Содержание программы изменено. Решения по прежней версии требуют нового рассмотрения.');return clone(after);
+}
+export function addParticipant(program,{name,role:roleValue}){const p=clone(program);if(p.collaboration.participants.length>=30)throw new RangeError('Не более 30 участников');p.collaboration.participants.push({id:crypto.randomUUID(),name:text(name,160),role:role(roleValue),provenance:'local-manual'});recordHistory(p,'Добавлен участник','Организационная запись, личность и права не проверены.');return clone(p);}
+export function updateParticipant(program,{id:participantId,name,role:roleValue}){const p=clone(program),a=p.collaboration.participants.find(x=>x.id===participantId);if(!a)throw new TypeError('Участник не найден');a.name=text(name,160);a.role=role(roleValue);a.provenance='local-manual';recordHistory(p,'Изменен участник','Прежние авторские снимки не изменены.');return clone(p);}
+export function selectParticipant(program,participantId){const p=clone(program);if(participantId!==null&&!p.collaboration.participants.some(x=>x.id===participantId))throw new TypeError('Участник не найден');p.collaboration.activeParticipantId=participantId;return clone(p);}
+export function removeParticipant(program,participantId){const p=clone(program);if(!p.collaboration.participants.some(x=>x.id===participantId))throw new TypeError('Участник не найден');recordHistory(p,'Удален участник','Снимки авторов прежних записей сохранены.');p.collaboration.participants=p.collaboration.participants.filter(x=>x.id!==participantId);if(p.collaboration.activeParticipantId===participantId)p.collaboration.activeParticipantId=null;return clone(p);}
+export function addComment(program,{scope,measureId=null,text:value}){const p=clone(program);if(p.collaboration.comments.length>=200)throw new RangeError('Не более 200 комментариев');p.collaboration.comments.push({id:crypto.randomUUID(),scope,measureId,text:text(value),author:actor(p),at:new Date().toISOString(),provenance:'local-manual'});recordHistory(p,'Добавлен комментарий',scope==='program'?'К программе':'К мере '+measureId);return clone(p);}
+export function addDecision(program,{revision,decision,note='',confirmed=false}){const p=clone(program);if(confirmed!==true)throw new TypeError('Нужно отдельное явное подтверждение решения');if(revision!==p.collaboration.revision)throw new TypeError('Версия изменилась: пересмотрите решение');if(!p.collaboration.activeParticipantId)throw new TypeError('Явно выберите автора организационной записи');if(p.collaboration.decisions.length>=100)throw new RangeError('Не более 100 решений');if(!outcomes.includes(decision))throw new TypeError('Неизвестный вид решения');p.collaboration.decisions.push({id:crypto.randomUUID(),revision,decision,note:text(note),author:actor(p),at:new Date().toISOString(),provenance:'local-manual'});recordHistory(p,'Записано решение',`Версия ${revision}: ${decision}. Организационная запись, не подтверждение денег.`);return clone(p);}
+export function decisionStatus(program,decision){const p=clone(program),d=p.collaboration.decisions.find(x=>x.id===decision.id);if(!d)throw new TypeError('Решение не найдено');return d.provenance==='received-unverified'?'received-unverified':d.revision===p.collaboration.revision?'current-local':'stale';}
+export function markCollaborationReceived(program){const p=clone(program);p.collaboration.activeParticipantId=null;for(const key of ['participants','comments','history','decisions'])p.collaboration[key].forEach(item=>{item.provenance='received-unverified';});return p;}

@@ -20,7 +20,7 @@ import { existsSync } from "node:fs";
 for (const file of [".env",".git",".github","test","compose.yaml"]) assert.equal(existsSync("/app/"+file),false,file);
 const root="http://127.0.0.1:3000";
 assert.equal(process.getuid(),1000);
-for (const asset of ["/","/app.js","/styles.css","/runtime-config.js","/program-p2-ui.js","/program-p2-model.js","/program-p2-schema.js","/expense-import.js","/document-text.js"]) {
+for (const asset of ["/","/app.js","/styles.css","/runtime-config.js","/program-p2-ui.js","/program-p2-model.js","/program-p2-schema.js","/expense-import.js","/document-text.js","/program-ai.js","/program-ai-ui.js","/program-ai-transport.js","/pilot-library.js","/pilot-library-ui.js","/program-collaboration.js","/program-collaboration-ui.js"]) {
  const r=await fetch(root+"/cost-reduction-programs"+asset); assert.equal(r.status,200,asset);
 }
 const config=await (await fetch(root+"/cost-reduction-programs/api/config")).json();

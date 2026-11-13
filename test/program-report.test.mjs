@@ -92,3 +92,18 @@ test('scenario report shows changed composition and incomplete parameters withou
  assert.match(text,/Нет данных/);
  assert.match(text,/Сложность: Не оценена/);
 });
+
+test('P3 agreement request is a draft in every format and never invents approval or financial data',async()=>{
+ const p=sample();p.approvalRequest={requestedDecision:'Разрешить пилот — без обещаний <script>alert(1)</script>',decisionOwner:'Комитет № 1',decisionDueDate:'2026-12-20',dataLimitations:'Ещё не проверены все базы\u00AD и сезонность'};p.measures[0].priority.risk='high';
+ const before=JSON.stringify(p),report=createProgramReport(p),text=reportText(report);
+ for(const phrase of ['Запрос решения: черновик для согласования','Требуемое решение: Разрешить пилот - без обещаний','Кто принимает решение: Комитет № 1. Срок решения: 2026-12-20','Еще не проверены все базы и сезонность','Риск: Высокий','не принятое решение и не электронная подпись','0,76 млн ₽'])assert.ok(text.includes(phrase),phrase);
+ assert.equal(report.version,3);assert.equal(JSON.stringify(p),before);
+ for(const format of ['txt','html','docx','pdf']){
+   const file=await exportProgramReport(p,format),bytes=new Uint8Array(await file.blob.arrayBuffer());
+   if(format==='pdf'){assert.match(new TextDecoder('latin1').decode(bytes),/^%PDF-/);assert.doesNotMatch(new TextDecoder('latin1').decode(bytes),/\/JavaScript|\/Launch/);}
+   else if(format==='docx'){const xml=zipText(bytes)['word/document.xml'];assert.match(xml,/черновик для согласования/);assert.match(xml,/Комитет № 1/);assert.match(xml,/&lt;script&gt;/);assert.match(xml,/w:top="720"/);}
+   else {const value=await file.blob.text();assert.match(value,/черновик для согласования/);assert.match(value,/Комитет № 1/);if(format==='html')assert.doesNotMatch(value,/<script>/);}
+ }
+ assert.equal(JSON.stringify(p),before);
+ const empty=reportText(createProgramReport(createProgram()));assert.match(empty,/Требуемое решение: Не задано/);assert.match(empty,/Кто принимает решение: Не задано/);assert.match(empty,/Не выбраны меры/);
+});

@@ -1,3 +1,4 @@
+import { decisionStatus } from './program-collaboration.js';
 import { documentText } from './document-text.js';
 import { diagnosticOptions, priorityOptions, compareProgramScenarios, diagnoseProgram } from './program-p2-model.js';
 import { validateProgram, calculateProgram, calculateActual } from './program-model.js';
@@ -79,6 +80,34 @@ export function createProgramReport(source) {
   add('paragraph',`Начало программы: ${program.startMonth}. Денежные суммы в млн ₽.`);
   add('paragraph',`Последнее обновление (UTC): ${program.updatedAt}`);
   add('paragraph',`Заметки программы: ${specified(program.notes)}`);
+  add('heading','Запрос решения: черновик для согласования');
+  add('paragraph','Это подготовленный запрос, не принятое решение и не электронная подпись. Поля получателя и ответственного не предоставляют права доступа. Комментарии, история и решения ниже являются локальными организационными записями с ручным указанием автора, не проверкой личности и не общей серверной историей.');
+  add('paragraph',`Требуемое решение: ${specified(program.approvalRequest.requestedDecision)}`);
+  add('paragraph',`Кто принимает решение: ${specified(program.approvalRequest.decisionOwner)}. Срок решения: ${specified(program.approvalRequest.decisionDueDate)}.`);
+  add('paragraph',`Ограничения исходных данных, указанные пользователем: ${specified(program.approvalRequest.dataLimitations)}`);
+  add('paragraph',`Автоматическая проверка данных: ${calculation.reliable?'план заполнен, но требует проверки исходных предположений':calculation.reasons.join('; ')}. Факты заполнены за ${calculation.actual.completeMonths} полных месяцев из 12; статус исполнения не подтверждает экономию.`);
+  add('paragraph','Исходные параметры и границы каждой инициативы, расчеты, факты, риски и ответственные приведены ниже. Незаданные поля не подменяются предположениями. До решения проверьте сопоставимость баз, пересечения, качество, сроки и затраты запуска.');
+  for(const measure of program.measures){
+    const title=library.find(item=>item.id===measure.id).title;
+    const risk=priorityOptions.risk.find(([value])=>value===measure.priority.risk)?.[1]||'Не оценен';
+    add('paragraph',`Инициатива: ${title}${measure.included?'':' (исключена из итогов)'}. Ответственный: ${specified(measure.execution.owner)}. Срок: ${specified(measure.execution.dueDate)}. Риск: ${risk}. Контроль качества: ${specified(measure.execution.qualityMetric)}.`);
+  }
+  add('heading','Локальная совместная работа: копии JSON');
+  add('paragraph',`Версия содержания: ${program.collaboration.revision}. Все имена и роли вводятся вручную, не проверяются и не ограничивают доступ. Файл можно изменить вне приложения. Это не аудит и не электронная подпись; полученные копии не синхронизируются автоматически.`);
+  const originLabel=value=>value==='received-unverified'?'получено из копии, не проверено':'локальная ручная запись, автор не проверен';
+  for(const participant of program.collaboration.participants)add('paragraph',`Участник: ${participant.name}; организационная роль: ${participant.role}; ${originLabel(participant.provenance)}.`);
+  if(!program.collaboration.participants.length)add('paragraph','Участники не указаны.');
+  add('subheading','Комментарии');
+  if(!program.collaboration.comments.length)add('paragraph','Комментариев нет.');
+  for(const comment of program.collaboration.comments)add('paragraph',`${comment.scope==='program'?'Программа':library.find(m=>m.id===comment.measureId)?.title||comment.measureId}. ${comment.author.name} (${comment.author.role||'роль не указана'}), ${comment.at}; ${originLabel(comment.provenance)}: ${comment.text}`);
+  add('subheading','Решения по версии содержания');
+  if(!program.collaboration.decisions.length)add('paragraph','Решения не записаны. Запрос решения не означает одобрение.');
+  const decisionLabels={approve:'Согласовать',reject:'Отклонить','changes-requested':'Нужны изменения'};
+  for(const decision of program.collaboration.decisions){const status=decisionStatus(program,decision);add('paragraph',`Версия ${decision.revision}: ${decisionLabels[decision.decision]}. ${decision.author.name}, ${decision.at}. ${status==='received-unverified'?'Полученное решение не проверено и не является текущим локальным согласованием':status==='stale'?'Устарело: содержание программы изменилось, требуется новое рассмотрение':'Относится к текущей версии, но является только ручной локальной записью'}. ${specified(decision.note)}`);}
+  add('paragraph','Организационное согласование не подтверждает финансовый эффект, не снимает ограничения неполноты и пересечений, не меняет факты или параметры калькулятора.');
+  add('subheading','Ограниченная локальная история');
+  add('paragraph',`Записей сохранено: ${program.collaboration.history.length}. Ранних записей не включено из-за лимита: ${program.collaboration.historyDropped}. История не является защищенным журналом и может быть изменена владельцем JSON.`);
+  for(const item of program.collaboration.history)add('paragraph',`Версия ${item.revision}; ${item.at}; ${item.author.name}; ${originLabel(item.provenance)}. ${item.action}: ${item.summary}`);
   add('heading','Проверка полноты и пересечений');
   add('paragraph',calculation.reliable?'Все включённые меры заполнены; проверка пересечений пройдена. Расчёт остаётся сценарием, не гарантией экономии.':`Достоверный общий итог заблокирован: ${calculation.reasons.join('; ')}.`);
   add('paragraph',`Отсутствие двойного счёта: ${program.overlap.confirmed?'явно подтверждено пользователем':program.measures.filter(m=>m.included).length<=1?'между мерами не требуется (включено не более одной меры)':'не подтверждено'}. Пояснение: ${specified(program.overlap.note)}`);
@@ -152,7 +181,7 @@ export function createProgramReport(source) {
   add('paragraph','Каждая мера рассчитывается отдельно существующим калькулятором. Внедрение оплачивается в начале месяца запуска; поддержка начисляется с этого же месяца. До запуска потоки равны нулю. Линейный разгон использует среднюю точку месяца. Общая окупаемость определяется по суммарным потокам, а не средним сроком мер, в пределах 120 месяцев; учитываются поздние затраты запуска. Налоги, сезонность, изменение выручки и стоимость капитала не моделируются.');
   add('paragraph','Факт = сопоставимая база − фактические расходы − фактическое внедрение − фактическая поддержка. В поле расходов не включают внедрение и поддержку повторно. Отрицательный результат сохраняется. План сравнивается только с заполненными фактами для тех же мер и месяцев. Неполнота и нерешённые пересечения не дают достоверного общего итога.');
   add('paragraph','Программа хранится только в текущем браузере и origin. Файл сформирован локально, без передачи программы AI-провайдеру. JSON предназначен для резервного копирования; при импорте создаётся новая программа и подтверждения требуют повторной проверки.');
-  return {version:2,program,calculation,blocks};
+  return {version:3,program,calculation,blocks};
 }
 export async function exportProgramReport(program,format) {
   if(!Object.hasOwn(exportFormats,format)) throw new TypeError('Неизвестный формат экспорта.');

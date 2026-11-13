@@ -4,7 +4,7 @@ import { createProgram,createProgramMeasure,validateProgram,migrateProgramV1,cal
 import { diagnosticOptions,priorityOptions,diagnoseProgram,addDiagnosticMeasures,createComparisonScenarios,updateComparisonScenario,compareProgramScenarios,rankProgramMeasures } from '../public/program-p2-model.js';
 import { validateExpenses,MAX_EXPENSE_RECORDS } from '../public/program-p2-schema.js';
 const sample=()=>{const p=createProgram({id:'sample',startMonth:'2026-01'});const m=createProgramMeasure('procurement');m.inputs={annualSpend:12,savingsPercent:10,implementationCost:.2,monthlyCost:.02,rampMonths:0,startMonth:1};p.measures.push(m);return p;};
-const v1=p=>{const old=structuredClone(p);delete old.diagnostic;delete old.expenses;delete old.scenarios;old.measures.forEach(m=>delete m.priority);return old;};
+const v1=p=>{const old=structuredClone(p);delete old.collaboration;delete old.approvalRequest;delete old.diagnostic;delete old.expenses;delete old.scenarios;old.measures.forEach(m=>delete m.priority);return old;};
 const expense=()=>({id:'expense-1',period:'2026-01',article:'Материалы',department:'Цех',supplier:'Учебный поставщик',amountRub:1000,source:'Искусственный пример'});
 test('P2 defaults add no invented diagnosis, financial inputs, confidence or evidence',()=>{
  const p=createProgram(),m=createProgramMeasure('procurement');assert.deepEqual(p.diagnostic,{industry:'',spendAreas:[],constraints:[],availableData:[]});assert.deepEqual(p.expenses,{records:[]});assert.deepEqual(p.scenarios,[]);assert.deepEqual(m.priority,{complexity:'unknown',risk:'unknown',evidenceType:'unknown',sourceComment:''});assert.ok(Object.values(m.inputs).filter(v=>v===null).length===5);assert.doesNotMatch(JSON.stringify(p),/confidence|apiKey/);

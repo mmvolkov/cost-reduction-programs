@@ -1,0 +1,26 @@
+/* P3 controls stay local to the program workspace. */
+.pm-p3 { min-width:0; }
+.pm-p3 .pm-ai-panel>summary { font-size:20px; font-weight:700; line-height:1.4; min-height:48px; cursor:pointer; padding:8px 0; }
+.pm-p3 .pm-ai-panel>summary::marker { color:#009a4d; }
+.pm-p3 .pm-ai-panel>.pm-grid,.pm-p3 .pm-ai-panel>.pm-field,.pm-p3 .pm-ai-panel>button { margin-top:16px; }
+.pm-p3 .pm-ai-panel h4 { font-size:18px; line-height:1.4; margin:24px 0 12px; }
+.pm-p3 :is(input,select,textarea) { font-size:16px; }
+.pm-p3 :is(button,select,textarea) { min-height:48px; }
+.pm-p3 .pm-ai-preview,.pm-p3 .pm-ai-response { white-space:pre-wrap; overflow-wrap:anywhere; word-break:normal; font:inherit; font-size:15px; line-height:1.6; color:#111827; padding:16px; border:1px solid #e2e8f0; border-radius:12px; background:#f8fafc; max-height:440px; overflow:auto; max-width:100%; }
+.pm-p3 .pm-ai-panel button:disabled { opacity:.6; cursor:not-allowed; }
+.pm-p3 .pm-ai-panel label { line-height:1.6; }
+@media(max-width:760px) { .pm-p3 .pm-ai-panel>summary { font-size:18px; } }
+@media(max-width:420px) { .pm-p3 .pm-ai-panel>button,.pm-p3 .pm-toolbar>button { width:100%; } .pm-p3 .pm-ai-preview,.pm-p3 .pm-ai-response { padding:12px; } }
+/* Local collaboration is organizational metadata, not access control. */
+.pm-p3 .pm-collaboration-panel>summary { min-height:48px; padding:8px 0; cursor:pointer; font-size:20px; font-weight:700; line-height:1.4; }
+.pm-p3 .pm-collaboration-panel>summary::marker { color:#009a4d; }
+.pm-p3 .pm-local-section { border-top:1px solid #e2e8f0; margin-top:24px; padding-top:16px; min-width:0; }
+.pm-p3 .pm-local-section>summary { min-height:48px; padding:10px 0; font-size:18px; font-weight:700; cursor:pointer; line-height:1.5; }
+.pm-p3 .pm-local-section>.pm-field,.pm-p3 .pm-collaboration-panel>.pm-field,.pm-p3 .pm-local-section>.pm-grid,.pm-p3 .pm-local-section>button { margin-top:16px; }
+.pm-p3 .pm-local-record { padding:16px; border:1px solid #e2e8f0; border-radius:12px; margin-top:16px; min-width:0; }
+.pm-p3 .pm-local-record h4 { font-size:16px; line-height:1.5; margin-bottom:8px; }
+.pm-p3 .pm-local-text { white-space:pre-wrap; overflow-wrap:anywhere; font-size:15px; line-height:1.6; }
+.pm-p3 .pm-local-section :is(ul,ol) { padding-left:24px; }
+.pm-p3 .pm-local-section li { margin-top:12px; overflow-wrap:anywhere; }
+@media(max-width:760px) { .pm-p3 .pm-collaboration-panel>summary { font-size:18px; } }
+@media(max-width:420px) { .pm-p3 .pm-local-section>button { width:100%; } .pm-p3 .pm-local-record { padding:12px; } }

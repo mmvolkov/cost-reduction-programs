@@ -1,0 +1,16 @@
+/* Educational pilots only; the existing P1/P2 controls and financial engine are unchanged. */
+.pm-pilot-library { min-width:0; }
+.pm-pilot-library>.pm-panel>summary { font-size:20px; font-weight:700; min-height:48px; padding:8px 0; cursor:pointer; line-height:1.4; }
+.pm-pilot-library summary::marker { color:#009a4d; }
+.pm-pilot-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; gap:16px; margin-top:24px; }
+.pm-pilot-card { min-width:0; border:1px solid #e2e8f0; border-radius:16px; padding:20px; overflow-wrap:anywhere; }
+.pm-pilot-card>summary,.pm-pilot-template>summary { font-size:16px; font-weight:700; line-height:1.5; min-height:48px; cursor:pointer; padding:8px 0; }
+.pm-pilot-card p,.pm-pilot-card li { font-size:15px; line-height:1.6; }
+.pm-pilot-card h4 { font-size:16px; margin-top:20px; margin-bottom:8px; }
+.pm-pilot-card :is(ol,ul) { padding-left:24px; }
+.pm-pilot-card li+li { margin-top:8px; }
+.pm-pilot-card>.pm-button { margin-top:20px; min-height:48px; width:100%; }
+.pm-pilot-card>.pm-button:disabled { cursor:default; opacity:.7; }
+.pm-pilot-template { margin-top:20px; }
+.pm-pilot-template textarea { max-width:100%; font-size:16px; line-height:1.6; }
+@media(max-width:760px) { .pm-pilot-grid { grid-template-columns:1fr; } .pm-pilot-card { padding:16px; } .pm-pilot-library>.pm-panel>summary { font-size:18px; } }

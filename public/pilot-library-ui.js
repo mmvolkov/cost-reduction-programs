@@ -1,0 +1,16 @@
+import { measures } from './data.js';
+import { pilotLibrary, pilotLibraryNotice, pilotTemplate, addPilotMeasure } from './pilot-library.js';
+const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
+export function createPilotLibraryController({getProgram,mutate,canNavigate,announce,refreshP1}) {
+  let host;
+  function refreshDerived(){if(!host)return;const ids=new Set(getProgram().measures.map(m=>m.id));for(const button of host.querySelectorAll('[data-pilot-measure]')){const exists=ids.has(button.dataset.pilotMeasure);button.disabled=exists;button.textContent=exists?'Мера уже есть: поля сохранены':'Добавить меру с пустыми параметрами';}}
+  function mount(root){host=root;host.classList.add('pm-pilot-library');const panel=el('details',undefined,'pm-panel');panel.id='pm-pilot-library';panel.append(el('summary','Учебная библиотека пилотов'),el('p',pilotLibraryNotice,'pm-notice'),el('p','Добавление создает только отсутствующую меру. Существующая мера, ее исключение из расчета, финансы и факты не меняются. Текст сценария можно вручную адаптировать в карточке исполнения.','pm-help'));const list=el('div',undefined,'pm-pilot-grid');
+    for(const pilot of pilotLibrary){const card=el('details',undefined,'pm-pilot-card');card.append(el('summary',pilot.title),el('p','Учебный пример - '+measures.find(m=>m.id===pilot.measureId).title,'pm-help'));
+      for(const [label,text] of [['Когда подходит',pilot.applicability],['Что собрать',pilot.baseline],['Метрика',pilot.metric],['Защита качества',pilot.qualityGuard],['Когда остановить',pilot.stopRule],['Проверка результата',pilot.evidence]]){card.append(el('h4',label),el('p',text));}
+      card.append(el('h4','Шаги пилота'));const steps=el('ol');pilot.actions.forEach(s=>steps.append(el('li',s)));card.append(steps,el('h4','Риски'));const risks=el('ul');pilot.risks.forEach(s=>risks.append(el('li',s)));card.append(risks);
+      const draft=el('details',undefined,'pm-pilot-template');draft.append(el('summary','Текст для ручного копирования'));const label=el('label',undefined,'pm-field');label.append(el('span','Учебный шаблон: '+pilot.title));const text=el('textarea');text.readOnly=true;text.rows=8;text.value=pilotTemplate(pilot.id);label.append(text);draft.append(label,el('p','Это не утвержденный план. Перед использованием укажите ответственного, срок и свои критерии; суммы считайте в калькуляторе.','pm-help'));card.append(draft);
+      const button=el('button',undefined,'pm-button');button.type='button';button.dataset.pilotMeasure=pilot.measureId;button.addEventListener('click',()=>{if(!canNavigate())return;try{const result=addPilotMeasure(getProgram(),pilot.id);if(!result.added){announce('Мера уже существует. Ее данные не изменены.');refreshDerived();return;}if(mutate(n=>Object.assign(n,result.program),{financial:true})){refreshP1();announce('Добавлена мера без финансовых допущений. Учебный текст не заменил поля и факты.');}}catch(error){announce(error.message||'Не удалось добавить меру.');}});card.append(button);list.append(card);
+    }panel.append(list);host.replaceChildren(panel);refreshDerived();
+  }
+  return {mount,refreshDerived};
+}
