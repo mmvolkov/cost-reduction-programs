@@ -57,10 +57,10 @@ test('export ignores tampered report prose and values and rejects unsupported fo
 });
 test('PDF heading keeps its trailing gap and following body lines together at a page boundary',async()=>{
  const {buildPdf}=await import('../public/report-export-pdf.js');
- // 28 body rows + two subtitles leave y=722pt. A heading without its
+ // 28 body rows + three subtitles leave y=739pt with 36pt margins. A heading without its
  // trailing 8pt gap fits the old check, but its following paragraph does not.
  const blocks=[...Array.from({length:28},()=>({type:'paragraph',text:'Строка'})),
-   {type:'subtitle',text:'Подпись'},{type:'subtitle',text:'Подпись'},
+   {type:'subtitle',text:'Подпись'},{type:'subtitle',text:'Подпись'},{type:'subtitle',text:'Подпись'},
    {type:'heading',text:'Методика и ограничения'},
    {type:'paragraph',text:'Следующий абзац должен остаться вместе с заголовком. '.repeat(5)}];
  const raw=Buffer.from(await buildPdf({blocks})).toString('latin1');
@@ -70,7 +70,7 @@ test('PDF heading keeps its trailing gap and following body lines together at a 
  // Only the heading uses 14pt; it must be on the second page with body text.
  assert.doesNotMatch(stream(contents[0]),/\s14 Tf/);
  assert.match(stream(contents[1]),/\s14 Tf/);
- assert.match(stream(contents[1]),/\s10\.5 Tf/);
+ assert.match(stream(contents[1]),/\s11 Tf/);
 });
 
 test('program exports remove soft hyphens and normalize compatibility dashes without changing saved JSON',async()=>{
@@ -97,4 +97,14 @@ test('program exports remove soft hyphens and normalize compatibility dashes wit
  }
  assert.equal(JSON.stringify(p),source);
  assert.match(p.name,/\u00AD/);assert.match(p.notes,/\uFE58/);
+});
+
+test('PDF uses A4 with 36pt body margins and 11pt embedded fallback text',async()=>{
+ const {buildPdf}=await import('../public/report-export-pdf.js');
+ const raw=Buffer.from(await buildPdf({blocks:[{type:'paragraph',text:'Проверка полей'}]})).toString('latin1');
+ const box=raw.match(/\/MediaBox \[0 0 ([\d.]+) ([\d.]+)\]/);assert.ok(box);assert.ok(Math.abs(Number(box[1])-595.28)<.001);assert.ok(Math.abs(Number(box[2])-841.89)<.001);
+ const contents=[...raw.matchAll(/\/Type \/Page\b[\s\S]*?\/Contents (\d+) 0 R/g)].map(m=>m[1]);
+ const body=raw.match(new RegExp('(?:^|\\n)'+contents[0]+' 0 obj\\n([\\s\\S]*?)\\nendobj'))[1];
+ const stream=inflateSync(Buffer.from(body.match(/stream\n([\s\S]*?)\nendstream/)[1],'latin1')).toString('latin1');
+ assert.match(stream,/\s11 Tf/);assert.match(stream,/36\. 794\.88\d* Td/);assert.match(raw,/\/FontFile2/);
 });

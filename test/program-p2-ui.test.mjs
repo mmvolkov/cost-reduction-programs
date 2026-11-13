@@ -6,7 +6,7 @@ const p1=await readFile(new URL('../public/program-ui.js',import.meta.url),'utf8
 const css=await readFile(new URL('../public/program-styles.css',import.meta.url),'utf8');
 
 test('P2 integrates through validated P1 mutation and current schema, not a second store',()=>{
- assert.match(p1,/import \{ PROGRAM_SCHEMA_VERSION \}/);
+ assert.match(p1,/import \{ PROGRAM_SCHEMA_VERSION, PROGRAM_STORAGE_KEY \}/);
  assert.doesNotMatch(p1,/schemaVersion:1/);
  assert.match(p1,/createProgramP2Controller\(\{getProgram:\(\)=>clone\(active\(\)\),mutate:apply,canNavigate,announce,refreshP1:render\}\)/);
  assert.match(p1,/p2\.refreshDerived\(\)/);
@@ -67,7 +67,7 @@ test('changing import settings invalidates both visible preview and pending pars
 });
 
 test('a mutation cannot leave the current program too large for its recovery JSON export',()=>{
- assert.match(p1,/const valid=validateProgram\(next\);exportProgramJson\(valid\);state\.programs=/);
+ assert.match(p1,/const valid=recordProgramChange\(active\(\),validateProgram\(next\)\);exportProgramJson\(valid\);state\.programs=/);
  assert.match(p1,/function addProgram\(program\)\{try\{exportProgramJson\(program\);\}/);
 });
 

@@ -23,8 +23,18 @@ test('program UI is browser-only and renders user values without HTML injection'
   assert.match(app,/temperature:0/);
   assert.doesNotMatch(app,/currentContext\.program|currentContext\.facts|JSON\.stringify\(program/);
 });
-test('branch checks cover P1/P2 without deploying review branches', async () => {
+test('branch checks cover P1/P2/P3 without deploying review branches', async () => {
   const ci=await read('.github/workflows/ci.yml'), pages=await read('.github/workflows/pages.yml');
-  assert.match(ci,/branches: \[main, codex\/program-management-p1, codex\/program-management-p2\]/);
-  assert.match(pages,/branches: \[main\]/); assert.doesNotMatch(pages,/program-management-p[12]/);
+  assert.match(ci,/branches: \[main, codex\/program-management-p1, codex\/program-management-p2, codex\/program-management-p3\]/);
+  assert.match(pages,/branches: \[main\]/); assert.doesNotMatch(pages,/program-management-p[123]/);
+});
+test('pilot previews use the workspace monotonic revision and cross-tab conflict gate', async () => {
+  const source=await read('public/program-ui.js');
+  const wiring=source.split('\n').find(line=>line.includes('const pilots=createPilotLibraryController('));
+  assert.match(wiring,/getRevision:\(\)=>workspaceRevision/);
+  assert.match(wiring,/canNavigate:canUseContextualTools/);
+  assert.match(source,/function canUseContextualTools\(\)[\s\S]*?store\.checkCurrent\(/);
+  // A pilot's own confirmation checkbox must not stale its preview. Inputs in
+  // the actual program remain outside these two narrowly scoped review panels.
+  assert.match(source,/root\.addEventListener\('input',event=>\{if\(!event\.target\.closest\('#pm-context-ai, #pm-pilot-library \.pm-pilot-preview'\)\)invalidateAi/);
 });

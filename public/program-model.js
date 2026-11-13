@@ -1,8 +1,9 @@
+import { createCollaboration, validateCollaboration } from './program-collaboration.js';
 import { calculateSavings } from './calculator.js';
 import { measures as library } from './data.js';
 import { createDiagnostic, createPriority, validateDiagnostic, validatePriority, validateExpenses, validateScenarios } from './program-p2-schema.js';
 
-export const PROGRAM_SCHEMA_VERSION = 2;
+export const PROGRAM_SCHEMA_VERSION = 3;
 export const executionStatuses = Object.freeze(['hypothesis', 'review', 'pilot', 'implementation', 'confirmation']);
 const limits = Object.freeze({annualSpend:1000000,savingsPercent:100,implementationCost:1000000,monthlyCost:100000,rampMonths:36});
 const keys = Object.keys(limits);
@@ -55,18 +56,25 @@ export function createProgramMeasure(id) {
   return {id,costScope:'',included:true,inputs:{annualSpend:null,savingsPercent:null,implementationCost:null,monthlyCost:null,rampMonths:null,startMonth:1},execution:{owner:'',dueDate:'',nextStep:'',status:'hypothesis',successCriterion:'',qualityMetric:'',notes:''},facts:Array.from({length:12},createFact),priority:createPriority()};
 }
 export function createProgram({id=globalThis.crypto.randomUUID(),name='Новая программа',startMonth=new Date().toISOString().slice(0,7)}={}) {
-  return validateProgram({id,name,startMonth,updatedAt:new Date().toISOString(),notes:'',measures:[],overlap:{confirmed:false,note:''},diagnostic:createDiagnostic(),expenses:{records:[]},scenarios:[]});
+  return validateProgram({id,name,startMonth,updatedAt:new Date().toISOString(),notes:'',measures:[],overlap:{confirmed:false,note:''},diagnostic:createDiagnostic(),expenses:{records:[]},scenarios:[],approvalRequest:createApprovalRequest(),collaboration:createCollaboration()});
 }
-export function validateProgram(program) { return validateProgramShape(program,false); }
-export function migrateProgramV1(program) { return validateProgramShape(program,true); }
+export function createApprovalRequest() { return {requestedDecision:'',decisionOwner:'',decisionDueDate:'',dataLimitations:''}; }
+function validateApprovalRequest(value) {
+  record(value,['requestedDecision','decisionOwner','decisionDueDate','dataLimitations'],'Запрос решения');
+  return {requestedDecision:text(value.requestedDecision),decisionOwner:text(value.decisionOwner,160),decisionDueDate:date(value.decisionDueDate),dataLimitations:text(value.dataLimitations)};
+}
+export function validateProgram(program) { return validateProgramShape(program,3); }
+export function migrateProgramV1(program) { return validateProgramShape(program,1); }
+export function migrateProgramV2(program) { return validateProgramShape(program,2); }
 function validateInputs(value) {
   record(value,[...keys,'startMonth'],'Параметры');
   const inputs=Object.fromEntries(keys.map(k=>[k,number(value[k],limits[k])]));
   if(!Number.isInteger(value.startMonth)||value.startMonth<1||value.startMonth>12)throw new RangeError('Месяц запуска должен быть от 1 до 12');
   inputs.startMonth=value.startMonth; return inputs;
 }
-function validateProgramShape(program,legacy) {
-  record(program,['id','name','startMonth','updatedAt','notes','measures','overlap',...(legacy?[]:['diagnostic','expenses','scenarios'])],'Программа');
+function validateProgramShape(program,version) {
+  const legacy=version===1;
+  record(program,['id','name','startMonth','updatedAt','notes','measures','overlap',...(legacy?[]:['diagnostic','expenses','scenarios']),...(version===3?['approvalRequest','collaboration']:[])],'Программа');
   if (typeof program.id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/.test(program.id)) throw new TypeError('Недопустимый ID');
   if (!Array.isArray(program.measures) || program.measures.length > library.length) throw new TypeError('Слишком много мер');
   record(program.overlap,['confirmed','note'],'Пересечения'); const seen = new Set();
@@ -80,7 +88,7 @@ function validateProgramShape(program,legacy) {
     if(!Array.isArray(m.facts) || m.facts.length!==12) throw new TypeError('Нужно 12 месяцев факта');
     return {id:m.id,costScope:text(m.costScope),included:bool(m.included),inputs,execution,facts:m.facts.map(validateFact),priority:legacy?createPriority():validatePriority(m.priority)};
   });
-  return {id:program.id,name:text(program.name,160),startMonth:month(program.startMonth),updatedAt:timestamp(program.updatedAt),notes:text(program.notes),measures,overlap:{confirmed:bool(program.overlap.confirmed),note:text(program.overlap.note)},diagnostic:legacy?createDiagnostic():validateDiagnostic(program.diagnostic),expenses:legacy?{records:[]}:validateExpenses(program.expenses),scenarios:legacy?[]:validateScenarios(program.scenarios,validateInputs)};
+  return {id:program.id,name:text(program.name,160),startMonth:month(program.startMonth),updatedAt:timestamp(program.updatedAt),notes:text(program.notes),measures,overlap:{confirmed:bool(program.overlap.confirmed),note:text(program.overlap.note)},diagnostic:legacy?createDiagnostic():validateDiagnostic(program.diagnostic),expenses:legacy?{records:[]}:validateExpenses(program.expenses),scenarios:legacy?[]:validateScenarios(program.scenarios,validateInputs),approvalRequest:version===3?validateApprovalRequest(program.approvalRequest):createApprovalRequest(),collaboration:version===3?validateCollaboration(program.collaboration,measures.map(m=>m.id)):createCollaboration()};
 }
 export function updateMeasureInputs(program,id,patch) {
   const next=validateProgram(program), measure=next.measures.find(m=>m.id===id); if(!measure) throw new TypeError('Мера не найдена');
