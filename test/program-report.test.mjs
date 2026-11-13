@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { createProgram,createProgramMeasure,confirmFact } from '../public/program-model.js';
 import { createProgramReport,exportProgramReport } from '../public/program-report.js';
 import { reportText } from '../public/report-export.js';
+import { recordProgramChange } from '../public/program-collaboration.js';
 function sample(){const p=createProgram({name:'Рабочая программа № 7',startMonth:'2026-01'}),m=createProgramMeasure('procurement');m.inputs={annualSpend:12,savingsPercent:10,implementationCost:.2,monthlyCost:.02,rampMonths:0,startMonth:1};m.execution.owner='Иван Петров';m.execution.dueDate='2026-03-31';m.execution.nextStep='Сверить коммерческие предложения';m.execution.successCriterion='Цена ниже при равном объёме';m.execution.qualityMetric='Срок поставки не увеличен';m.facts[0]=confirmFact({baseline:1,actualSpend:1.2,implementationCost:.1,monthlyCost:.02,source:'Счёт № 123; проверка главного бухгалтера',qualityChecked:true,normalization:{enabled:false,baseVolume:null,actualVolume:null,unit:''},confirmed:false});p.measures.push(m);return p;}
+test('report history displays meaningful change without internal grouping paths',()=>{const p=sample(),n=structuredClone(p);n.measures[0].inputs.annualSpend=15;const text=reportText(createProgramReport(recordProgramChange(p,n)));assert.match(text,/Годовая база: 12 → 15/);assert.doesNotMatch(text,/measure\.procurement\.inputs\.annualSpend/);});
 function zipText(bytes){const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);let p=0;const out={};while(view.getUint32(p,true)===0x04034b50){const size=view.getUint32(p+18,true),n=view.getUint16(p+26,true),extra=view.getUint16(p+28,true),name=new TextDecoder().decode(bytes.subarray(p+30,p+30+n)),start=p+30+n+extra;out[name]=new TextDecoder().decode(bytes.subarray(start,start+size));p=start+size;}return out;}
 test('program report uses actual execution fields, same deterministic totals, negative facts and matched plan only',()=>{
  const report=createProgramReport(sample()),text=reportText(report);assert.ok(Math.abs(report.calculation.firstYearNet-.76)<1e-12);assert.ok(Math.abs(report.calculation.paybackMonths-2.5)<1e-12);
@@ -106,4 +108,50 @@ test('P3 agreement request is a draft in every format and never invents approval
  }
  assert.equal(JSON.stringify(p),before);
  const empty=reportText(createProgramReport(createProgram()));assert.match(empty,/Требуемое решение: Не задано/);assert.match(empty,/Кто принимает решение: Не задано/);assert.match(empty,/Не выбраны меры/);
+});
+
+test('P3 report translates manual role snapshots in every section and format without changing JSON enums',async()=>{
+ const {addParticipant,selectParticipant,addComment,addDecision}=await import('../public/program-collaboration.js');
+ let p=sample();
+ for(const role of ['owner','editor','reviewer','viewer']){
+  p=addParticipant(p,{name:'Учебный участник '+p.collaboration.participants.length,role});
+  p=selectParticipant(p,p.collaboration.participants.at(-1).id);
+  p=addComment(p,{scope:'program',text:'Комментарий к учебной программе'});
+  p=addDecision(p,{revision:p.collaboration.revision,decision:'approve',confirmed:true});
+ }
+ const before=JSON.stringify(p),report=createProgramReport(p),text=reportText(report);
+ for(const label of ['Организатор','Редактор','Проверяющий','Наблюдатель']){
+  assert.match(text,new RegExp('организационная роль: '+label));
+  assert.ok(report.blocks.filter(b=>b.text?.includes('('+label+')')).length>=3,label+' in comments, decisions and history');
+ }
+ assert.doesNotMatch(text,/\b(owner|editor|reviewer|viewer)\b/);
+ for(const format of ['txt','html','docx','pdf']){
+  const output=await exportProgramReport(p,format),bytes=new Uint8Array(await output.blob.arrayBuffer());
+  if(format==='pdf'){
+   // PDF consumes these same validated canonical blocks and embeds Cyrillic mappings.
+   assert.match(new TextDecoder('latin1').decode(bytes),/\/ToUnicode/);
+   assert.ok(bytes.length>1000);
+  }else{
+   const value=format==='docx'?zipText(bytes)['word/document.xml']:await output.blob.text();
+   for(const label of ['Организатор','Редактор','Проверяющий','Наблюдатель'])assert.ok(value.includes(label));
+   assert.doesNotMatch(value,/\b(owner|editor|reviewer|viewer)\b/);
+  }
+ }
+ assert.equal(JSON.stringify(p),before);
+ assert.deepEqual(p.collaboration.participants.map(x=>x.role),['owner','editor','reviewer','viewer']);
+});
+
+test('report formats only payback to two decimals, preserving exact calculation and monetary precision',async()=>{
+ const {createComparisonScenarios}=await import('../public/program-p2-model.js');
+ let p=sample();p.measures[0].inputs.savingsPercent=5;p.measures[0].inputs.annualSpend=12.000006;
+ p=createComparisonScenarios(p);
+ const before=JSON.stringify(p),report=createProgramReport(p),text=reportText(report);
+ assert.match(text,/Индивидуальная окупаемость от запуска меры: 6,67 мес\./);
+ assert.match(text,/Общая окупаемость по сумме потоков: 6,67 мес\. от начала программы/);
+ assert.match(text,/Окупаемость: 6,67 мес\./);
+ assert.match(text,/12,000006/);
+ assert.notEqual(report.calculation.paybackMonths,6.67);
+ assert.equal(JSON.stringify(p),before);
+ p.measures[0].inputs.implementationCost=0.000001;
+ assert.match(reportText(createProgramReport(p)),/Индивидуальная окупаемость от запуска меры: < 0,01 мес\./);
 });

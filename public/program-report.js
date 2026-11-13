@@ -1,4 +1,5 @@
-import { decisionStatus } from './program-collaboration.js';
+import { formatPaybackMonths } from './program-p2-ui.js';
+import { decisionStatus, historyActionLabel } from './program-collaboration.js';
 import { documentText } from './document-text.js';
 import { diagnosticOptions, priorityOptions, compareProgramScenarios, diagnoseProgram } from './program-p2-model.js';
 import { validateProgram, calculateProgram, calculateActual } from './program-model.js';
@@ -7,6 +8,8 @@ import { fields } from './calculation-report.js';
 import { reportText, reportHtml, exportFormats } from './report-export.js';
 
 const money = n => new Intl.NumberFormat('ru-RU', {maximumSignificantDigits:12,notation:n !== 0 && Math.abs(n)<.000001?'scientific':'standard'}).format(n);
+const roleLabels = {owner:'Организатор',editor:'Редактор',reviewer:'Проверяющий',viewer:'Наблюдатель'};
+const roleLabel = role => roleLabels[role] || 'роль не указана';
 const specified = value => typeof value === 'string' && value.trim() ? value : 'Не задано';
 const statuses = {hypothesis:'Гипотеза',review:'Проверка',pilot:'Пилот',implementation:'Внедрение',confirmation:'Подтверждение'};
 const numeric = value => value === null ? 'Нет данных' : money(value);
@@ -44,7 +47,7 @@ function appendP2Report(program,add) {
     const result=scenario;
     add('subheading',specified(scenario.name));
     add('paragraph',result.reliable?'Параметры полны, проверка пересечений для этого расчета не требуется либо выполнена. Это сценарий, не гарантия.':`Достоверный общий итог заблокирован: ${result.reasons.join('; ')}.`);
-    add('paragraph',`${result.reliable?'План':'Предварительная сумма заполненной части'} за 12 месяцев: ${financial(result.firstYearNet)}. Устойчивый годовой эффект: ${financial(result.annualNet)}. Окупаемость: ${!result.reliable?'не показывается до заполнения и проверки пересечений':result.paybackMonths===null?'не достигнута за 120 месяцев':`${money(result.paybackMonths)} мес`}.`);
+    add('paragraph',`${result.reliable?'План':'Предварительная сумма заполненной части'} за 12 месяцев: ${financial(result.firstYearNet)}. Устойчивый годовой эффект: ${financial(result.annualNet)}. Окупаемость: ${!result.reliable?'не показывается до заполнения и проверки пересечений':result.paybackMonths===null?'не достигнута за 120 месяцев':formatPaybackMonths(result.paybackMonths).replace(/\.$/,'')}.`);
     for(const difference of scenario.compositionDifferences) add('paragraph',`Отличие состава от базы: ${difference.title} - ${difference.change==='removed'?'отсутствует в альтернативе':'добавлена в альтернативу'}.`);
     for(const m of scenario.measures){
       const original=program.measures.find(x=>x.id===m.id),title=library.find(x=>x.id===m.id).title;
@@ -95,26 +98,26 @@ export function createProgramReport(source) {
   add('heading','Локальная совместная работа: копии JSON');
   add('paragraph',`Версия содержания: ${program.collaboration.revision}. Все имена и роли вводятся вручную, не проверяются и не ограничивают доступ. Файл можно изменить вне приложения. Это не аудит и не электронная подпись; полученные копии не синхронизируются автоматически.`);
   const originLabel=value=>value==='received-unverified'?'получено из копии, не проверено':'локальная ручная запись, автор не проверен';
-  for(const participant of program.collaboration.participants)add('paragraph',`Участник: ${participant.name}; организационная роль: ${participant.role}; ${originLabel(participant.provenance)}.`);
+  for(const participant of program.collaboration.participants)add('paragraph',`Участник: ${participant.name}; организационная роль: ${roleLabel(participant.role)}; ${originLabel(participant.provenance)}.`);
   if(!program.collaboration.participants.length)add('paragraph','Участники не указаны.');
   add('subheading','Комментарии');
   if(!program.collaboration.comments.length)add('paragraph','Комментариев нет.');
-  for(const comment of program.collaboration.comments)add('paragraph',`${comment.scope==='program'?'Программа':library.find(m=>m.id===comment.measureId)?.title||comment.measureId}. ${comment.author.name} (${comment.author.role||'роль не указана'}), ${comment.at}; ${originLabel(comment.provenance)}: ${comment.text}`);
+  for(const comment of program.collaboration.comments)add('paragraph',`${comment.scope==='program'?'Программа':library.find(m=>m.id===comment.measureId)?.title||comment.measureId}. ${comment.author.name} (${roleLabel(comment.author.role)}), ${comment.at}; ${originLabel(comment.provenance)}: ${comment.text}`);
   add('subheading','Решения по версии содержания');
   if(!program.collaboration.decisions.length)add('paragraph','Решения не записаны. Запрос решения не означает одобрение.');
   const decisionLabels={approve:'Согласовать',reject:'Отклонить','changes-requested':'Нужны изменения'};
-  for(const decision of program.collaboration.decisions){const status=decisionStatus(program,decision);add('paragraph',`Версия ${decision.revision}: ${decisionLabels[decision.decision]}. ${decision.author.name}, ${decision.at}. ${status==='received-unverified'?'Полученное решение не проверено и не является текущим локальным согласованием':status==='stale'?'Устарело: содержание программы изменилось, требуется новое рассмотрение':'Относится к текущей версии, но является только ручной локальной записью'}. ${specified(decision.note)}`);}
+  for(const decision of program.collaboration.decisions){const status=decisionStatus(program,decision);add('paragraph',`Версия ${decision.revision}: ${decisionLabels[decision.decision]}. ${decision.author.name} (${roleLabel(decision.author.role)}), ${decision.at}. ${status==='received-unverified'?'Полученное решение не проверено и не является текущим локальным согласованием':status==='stale'?'Устарело: содержание программы изменилось, требуется новое рассмотрение':'Относится к текущей версии, но является только ручной локальной записью'}. ${specified(decision.note)}`);}
   add('paragraph','Организационное согласование не подтверждает финансовый эффект, не снимает ограничения неполноты и пересечений, не меняет факты или параметры калькулятора.');
   add('subheading','Ограниченная локальная история');
   add('paragraph',`Записей сохранено: ${program.collaboration.history.length}. Ранних записей не включено из-за лимита: ${program.collaboration.historyDropped}. История не является защищенным журналом и может быть изменена владельцем JSON.`);
-  for(const item of program.collaboration.history)add('paragraph',`Версия ${item.revision}; ${item.at}; ${item.author.name}; ${originLabel(item.provenance)}. ${item.action}: ${item.summary}`);
+  for(const item of program.collaboration.history)add('paragraph',`Версия ${item.revision}; ${item.at}; ${item.author.name} (${roleLabel(item.author.role)}); ${originLabel(item.provenance)}. ${historyActionLabel(item.action)}: ${item.summary}`);
   add('heading','Проверка полноты и пересечений');
   add('paragraph',calculation.reliable?'Все включённые меры заполнены; проверка пересечений пройдена. Расчёт остаётся сценарием, не гарантией экономии.':`Достоверный общий итог заблокирован: ${calculation.reasons.join('; ')}.`);
   add('paragraph',`Отсутствие двойного счёта: ${program.overlap.confirmed?'явно подтверждено пользователем':program.measures.filter(m=>m.included).length<=1?'между мерами не требуется (включено не более одной меры)':'не подтверждено'}. Пояснение: ${specified(program.overlap.note)}`);
   add('heading',calculation.reliable?'План программы':'Предварительная сумма заполненных мер, НЕ полный итог');
   add('paragraph',`План за 12 месяцев от начала программы: ${financial(calculation.firstYearNet)}.`);
   add('paragraph',`Годовой эффект при полном выходе всех заполненных мер на режим: ${financial(calculation.annualNet)}. Это не план первого года.`);
-  add('paragraph',`Общая окупаемость по сумме потоков: ${calculation.reliable ? (calculation.paybackMonths===null?'не достигнута в горизонте 120 месяцев':`${money(calculation.paybackMonths)} мес. от начала программы`) : 'не показывается до заполнения мер и проверки пересечений'}.`);
+  add('paragraph',`Общая окупаемость по сумме потоков: ${calculation.reliable ? (calculation.paybackMonths===null?'не достигнута в горизонте 120 месяцев':`${formatPaybackMonths(calculation.paybackMonths)} от начала программы`) : 'не показывается до заполнения мер и проверки пересечений'}.`);
   for(const row of calculation.series) add('paragraph',`Месяц ${row.month} (${monthName(program.startMonth,row.month-1)}): экономия ${financial(row.gross)}; внедрение ${financial(row.implementation)}; поддержка ${financial(row.support)}; чистый поток ${financial(row.net)}; накоплено ${financial(row.accumulated)}.`);
   add('heading','План-факт по заполненным данным');
   const actualPresentation=actualSummaryPresentation(calculation);
@@ -139,7 +142,7 @@ export function createProgramReport(source) {
     for(const [key,spec] of Object.entries(fields)) add('paragraph',`${spec.label}: ${numeric(m.inputs[key])}`);
     if(result.complete) {
       add('paragraph',`Индивидуальный первый год меры (12 месяцев от её запуска): ${financial(result.calculation.firstYearNet)}. Вклад в первые 12 месяцев программы: ${financial(result.series[11].accumulated)}.`);
-      add('paragraph',`Годовой эффект меры на полном режиме: ${financial(result.calculation.annualNet)}. Индивидуальная окупаемость от запуска меры: ${result.calculation.paybackMonths === null ? 'не достигнута за 120 месяцев' : `${money(result.calculation.paybackMonths)} мес`}. Индивидуальные сроки не усредняются для общей окупаемости.`);
+      add('paragraph',`Годовой эффект меры на полном режиме: ${financial(result.calculation.annualNet)}. Индивидуальная окупаемость от запуска меры: ${result.calculation.paybackMonths === null ? 'не достигнута за 120 месяцев' : formatPaybackMonths(result.calculation.paybackMonths).replace(/\.$/,'')}. Индивидуальные сроки не усредняются для общей окупаемости.`);
     } else add('paragraph','Индивидуальные итоги не рассчитаны: заполните все параметры меры.');
     add('paragraph',`Ответственный: ${specified(m.execution.owner)}. Срок: ${specified(m.execution.dueDate)}.`);
     add('paragraph',`Статус: ${statuses[m.execution.status]}. Следующий шаг: ${specified(m.execution.nextStep)}`);

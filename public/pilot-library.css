@@ -14,3 +14,7 @@
 .pm-pilot-template { margin-top:20px; }
 .pm-pilot-template textarea { max-width:100%; font-size:16px; line-height:1.6; }
 @media(max-width:760px) { .pm-pilot-grid { grid-template-columns:1fr; } .pm-pilot-card { padding:16px; } .pm-pilot-library>.pm-panel>summary { font-size:18px; } }
+.pm-pilot-preview { min-width:0; }
+.pm-pilot-diff { white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; font-size:15px; line-height:1.6; max-width:100%; padding:12px; border:1px solid #e2e8f0; border-radius:10px; background:#f8fafc; }
+.pm-pilot-preview>.pm-button { min-height:48px; margin:12px 8px 0 0; }
+@media(max-width:420px) { .pm-pilot-preview>.pm-button { width:100%; margin-right:0; } }

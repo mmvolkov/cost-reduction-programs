@@ -115,3 +115,26 @@ export function addPilotMeasure(program,pilotId) {
   next.measures.push(createProgramMeasure(pilot.measureId));next.overlap.confirmed=false;next.updatedAt=new Date().toISOString();
   return {program:validateProgram(next),added:true,measureId:pilot.measureId};
 }
+
+// Preview tokens are local capabilities, not serialized patches supplied by a file or model.
+const notePreviews=new WeakMap();
+export function previewPilotNotes(program,pilotId,revision=0) {
+  if(!Number.isSafeInteger(revision)||revision<0)throw new TypeError('Недопустимая версия предпросмотра');
+  const current=validateProgram(program),pilot=getPilot(pilotId),measure=current.measures.find(m=>m.id===pilot.measureId);
+  if(!measure)throw new TypeError('Сначала добавьте меру в программу');
+  const after=pilotTemplate(pilotId);
+  if(after.length>4000)throw new RangeError('Шаблон превышает предел заметки: 4000 символов');
+  const preview=Object.freeze({pilotId,measureId:pilot.measureId,programId:current.id,before:measure.execution.notes,after});
+  notePreviews.set(preview,{snapshot:JSON.stringify(current),revision});return preview;
+}
+export function discardPilotNotes(preview) { notePreviews.delete(preview); }
+export function applyPilotNotes(program,preview,{confirmed=false,revision=0}={}) {
+  if(confirmed!==true)throw new TypeError('Требуется отдельное подтверждение замены заметки');
+  const saved=notePreviews.get(preview);if(!saved)throw new TypeError('Недействительный предпросмотр');
+  const next=validateProgram(program);
+  if(revision!==saved.revision||JSON.stringify(next)!==saved.snapshot)throw new TypeError('Программа изменилась. Создайте новый предпросмотр');
+  const measure=next.measures.find(m=>m.id===preview.measureId);
+  if(!measure||next.id!==preview.programId)throw new TypeError('Целевая мера изменилась');
+  measure.execution.notes=preview.after;
+  return validateProgram(next);
+}

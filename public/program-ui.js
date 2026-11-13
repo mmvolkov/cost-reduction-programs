@@ -83,11 +83,13 @@ export function initProgramWorkspace(root,{onSelectionChange=()=>{},requestAi=as
     return true;
   }
   ai=createProgramAiController({getProgram:()=>clone(active()),getRevision:()=>workspaceRevision,mutate:apply,canNavigate:canUseContextualTools,announce,requestAi,getAiAvailability});
-  const pilots=createPilotLibraryController({getProgram:()=>clone(active()),mutate:apply,canNavigate:canUseContextualTools,announce,refreshP1:render});
+  const pilots=createPilotLibraryController({getProgram:()=>clone(active()),getRevision:()=>workspaceRevision,mutate:apply,canNavigate:canUseContextualTools,announce,refreshP1:render});
   const collaboration=createProgramCollaborationController({getProgram:()=>clone(active()),mutate:apply,canNavigate:canUseContextualTools,announce,refreshP1:render});
   // Invalidate even an unsaved invalid edit and a later change-back. AI's own
   // draft/consent controls are not program mutations. No text is sent here.
-  root.addEventListener('input',event=>{if(!event.target.closest('#pm-context-ai'))invalidateAi('Ввод изменен. Перед AI заново проверьте контекст.');},true);
+  // Draft/preview consent is not program data. Actual application still uses
+  // central apply(), which advances the monotonic revision and invalidates drafts.
+  root.addEventListener('input',event=>{if(!event.target.closest('#pm-context-ai, #pm-pilot-library .pm-pilot-preview'))invalidateAi('Ввод изменен. Перед AI заново проверьте контекст.');},true);
   window.addEventListener('storage',event=>{if(event.key!==null&&event.key!==PROGRAM_STORAGE_KEY)return;const current=store.checkCurrent();if(!current.ok){storageStatus=current.status;showStatus();invalidateAi('Данные изменены в другой вкладке. Экспортируйте текущую работу и перезагрузите страницу.');}});
   function render(){
     root.replaceChildren();root.classList.add('program-workspace');
