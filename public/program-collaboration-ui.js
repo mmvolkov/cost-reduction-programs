@@ -1,3 +1,4 @@
+import { instructionLink } from './instruction-links.js';
 import { measures } from './data.js';
 import { calculateProgram } from './program-model.js';
 import { collaborationRoles, collaborationLimits, addParticipant, updateParticipant, selectParticipant, addComment, addDecision, decisionStatus, historyActionLabel } from './program-collaboration.js';
@@ -55,7 +56,7 @@ export function createProgramCollaborationController({getProgram,mutate,canNavig
  }
  function mount(root){
   const openPanel=!!panel?.open,openSections=sectionNodes.map(section=>!!section.open);const p=getProgram();editingId='';programId=p.id;host=root;host.replaceChildren();host.classList.add('pm-p3');review=null;
-  panel=el('details',undefined,'pm-panel pm-collaboration-panel');panel.id='pm-local-collaboration';panel.open=openPanel;panel.append(el('summary','Локальные участники, комментарии и решения'),el('p',localCollaborationNotice,'pm-warning'),el('p','Все записи находятся в JSON текущей программы. Обмена в реальном времени и общей серверной копии нет. Импорт создает отдельную копию, полученные записи не подтверждают их подлинность.','pm-notice'));versionLabel=el('p','','pm-help');panel.append(versionLabel);status=el('p','','pm-message');status.setAttribute('role','status');status.setAttribute('aria-live','polite');status.id='pm-local-status';panel.append(status);
+  panel=el('details',undefined,'pm-panel pm-collaboration-panel');panel.id='pm-local-collaboration';panel.open=openPanel;panel.append(el('summary','Локальные участники, комментарии и решения'),instructionLink('approval'),el('p',localCollaborationNotice,'pm-warning'),el('p','Все записи находятся в JSON текущей программы. Обмена в реальном времени и общей серверной копии нет. Импорт создает отдельную копию, полученные записи не подтверждают их подлинность.','pm-notice'));versionLabel=el('p','','pm-help');panel.append(versionLabel);status=el('p','','pm-message');status.setAttribute('role','status');status.setAttribute('aria-live','polite');status.id='pm-local-status';panel.append(status);
   const participants=el('details',undefined,'pm-local-section');participants.append(el('summary','Участники и организационные роли'));
   const edit=select('Изменить существующую метку участника','pm-local-edit',[['','Новый участник'],...p.collaboration.participants.map(x=>[x.id,x.name])],id=>{editingId=id;const selected=getProgram().collaboration.participants.find(x=>x.id===id);nameInput.value=selected?.name||'';roleSelect.value=selected?.role||'';});editSelect=edit.input;
   const name=field('Имя (вводится вручную)','pm-local-name',{maxLength:160});nameInput=name.input;

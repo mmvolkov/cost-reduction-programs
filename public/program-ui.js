@@ -1,3 +1,4 @@
+import { instructionLink } from './instruction-links.js';
 import { createProgramP2Controller } from './program-p2-ui.js';
 import { createProgramAiController } from './program-ai-ui.js';
 import { createPilotLibraryController } from './pilot-library-ui.js';
@@ -104,7 +105,7 @@ export function initProgramWorkspace(root,{onSelectionChange=()=>{},requestAi=as
     toolbar.append(button('Скачать JSON',()=>{if(canNavigate()){download(new Blob([exportProgramJson(active())],{type:'application/json;charset=utf-8'}),'cost-reduction-program.json');announce('JSON подготовлен. Сохраните файл в надёжном месте.');}}));
     const file=element('input');file.type='file';file.accept='.json,application/json';file.id='pm-import-file';file.hidden=true;
     file.addEventListener('change',async()=>{const f=file.files?.[0];file.value='';if(!f||!canNavigate())return;if(f.size>2*1024*1024){announce('Файл слишком большой. Максимум 2 МБ.');return;}try{const p=importProgramJson(await f.text());if(addProgram(p))announce('Импортировано как новая программа. Прежняя программа не заменена. Подтверждения требуют повторной проверки.');}catch(e){announce('Импорт отклонён: '+e.message);}});
-    toolbar.append(button('Импорт JSON',()=>{if(canNavigate())file.click();}),file);root.append(toolbar);
+    toolbar.append(button('Импорт JSON',()=>{if(canNavigate())file.click();}),file,instructionLink('json'));root.append(toolbar);
     if(['corrupt','conflict','unavailable','quota'].includes(storageStatus.code)){const recovery=element('details',undefined,'pm-recovery');recovery.append(element('summary','Восстановление сохранения'));recovery.append(element('p','Сначала скачайте текущую программу в JSON. Перечитать хранилище можно перезагрузкой страницы после экспорта. Для повреждённой записи кнопка ниже явно разрешает замену текущими программами из памяти. При конфликте с другой вкладкой замена запрещена: экспортируйте работу и перезагрузите страницу.'));if(storageStatus.code!=='conflict')recovery.append(button('Разрешить замену сохранённой записи',async()=>{if(!canNavigate())return;if(!window.confirm('Вы сохранили резервную копию? Заменить запись браузера текущими программами из памяти?'))return;invalidateAi('Восстановление хранилища меняет версию контекста.');const result=await store.recover(state);storageStatus=result.status;render();announce(result.ok?'Сохранение восстановлено.':'Восстановление не удалось. Скачайте JSON.');}));root.append(recovery);}
     const p=active();const meta=element('div',undefined,'pm-panel pm-grid');
     meta.append(field('Название программы',p.name,v=>{const ok=apply(n=>{n.name=v;});if(ok){const option=[...programSelect.options].find(o=>o.value===p.id);if(option)option.textContent=v||'Без названия';}return ok;},{maxLength:160,id:'pm-name'}));
@@ -115,7 +116,7 @@ export function initProgramWorkspace(root,{onSelectionChange=()=>{},requestAi=as
     const aiArea=element('div');root.append(aiArea);ai.mount(aiArea);
     const collaborationArea=element('div');root.append(collaborationArea);collaboration.mount(collaborationArea);
     const add=element('div',undefined,'pm-toolbar');const available=measures.filter(m=>!p.measures.some(x=>x.id===m.id&&x.included));
-    const addSelect=select('Добавить меру из библиотеки',[['','Выберите меру'],...available.map(m=>[m.id,m.title])],'',id=>{if(id)addMeasure(id);},'pm-add-measure');add.append(addSelect,element('p','Поля каждой меры заполняются самостоятельно. Общая база быстрого калькулятора не копируется.','pm-help'));root.append(add);
+    const addSelect=select('Добавить меру из библиотеки',[['','Выберите меру'],...available.map(m=>[m.id,m.title])],'',id=>{if(id)addMeasure(id);},'pm-add-measure');add.append(addSelect,element('p','Поля каждой меры заполняются самостоятельно. Общая база быстрого калькулятора не копируется.','pm-help'),instructionLink('measures'));root.append(add);
     measureList=element('div',undefined,'pm-measures');root.append(measureList);renderMeasures();
     summary=element('div',undefined,'pm-panel pm-summary');summary.id='pm-program-summary';summary.setAttribute('aria-live','polite');root.append(summary);updateSummary();
     factArea=element('div',undefined,'pm-panel pm-facts');root.append(factArea);renderFacts();
@@ -168,7 +169,7 @@ export function initProgramWorkspace(root,{onSelectionChange=()=>{},requestAi=as
     if(focusId){const restored=document.getElementById(focusId);restored?.focus({preventScroll:true});if(caret!==null&&caret!==undefined)restored?.setSelectionRange?.(caret,caret);}
   }
   function renderFacts(){
-    factArea.replaceChildren();factArea.append(element('h3','План-факт по мере и месяцу'));
+    factArea.replaceChildren();factArea.append(element('h3','План-факт по мере и месяцу'),instructionLink('facts'));
     const p=active();if(!p.measures.length){factArea.append(element('p','Добавьте меру, чтобы записать фактические расходы.','pm-help'));return;}
     if(!p.measures.some(m=>m.id===factMeasureId))factMeasureId=p.measures[0].id;
     const grid=element('div',undefined,'pm-grid');grid.append(select('Мера',p.measures.map(m=>[m.id,measures.find(x=>x.id===m.id).title+(m.included?'':' (исключена)')]),factMeasureId,v=>{if(canNavigate()){factMeasureId=v;renderFacts();}},'pm-fact-measure'));
